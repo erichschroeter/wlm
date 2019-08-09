@@ -6,6 +6,7 @@ use winapi::shared::minwindef::MAX_PATH;
 use winapi::shared::minwindef::HINSTANCE;
 use winapi::shared::windef::HWND;
 use winapi::shared::ntdef::WCHAR;
+use winapi::shared::ntdef::NULL;
 use winapi::um::winuser::EnumWindows;
 use winapi::um::winuser::GetWindowTextW;
 use winapi::um::winuser::IsWindowVisible;
@@ -13,7 +14,7 @@ use winapi::um::winuser::GetWindowThreadProcessId;
 use winapi::um::winnt::HANDLE;
 use winapi::um::winnt::{PROCESS_QUERY_INFORMATION, PROCESS_VM_READ};
 use winapi::um::processthreadsapi::OpenProcess;
-use winapi::um::libloaderapi::GetModuleFileNameW;
+use winapi::um::psapi::GetModuleFileNameExW;
 use winapi::um::handleapi::CloseHandle;
 
 #[cfg(windows)]
@@ -50,7 +51,7 @@ unsafe extern "system" fn window_info_callback(
         GetWindowTextW(hwnd, text.as_mut_ptr(), 64);
         GetWindowThreadProcessId(hwnd, &mut proc_id);
         let process_handle: HANDLE = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, proc_id);
-        GetModuleFileNameW(process_handle as HINSTANCE, module_name.as_mut_ptr(), MAX_PATH as u32);
+        GetModuleFileNameExW(process_handle, NULL as HINSTANCE, module_name.as_mut_ptr(), MAX_PATH as u32);
         CloseHandle(process_handle);
         println!("{:?}: {} ------- {}", hwnd, String::from_utf16(&text).unwrap(), String::from_utf16(&module_name).unwrap());
     }
