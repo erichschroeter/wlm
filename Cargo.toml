@@ -5,3 +5,6 @@ authors = ["Erich Schroeter <erichschroeter@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3", features = ["winuser"] }
