@@ -1,12 +1,20 @@
 #[cfg(windows)] extern crate winapi;
 use std::io::Error;
 use winapi::shared::minwindef::LPARAM;
+use winapi::shared::minwindef::DWORD;
+use winapi::shared::minwindef::MAX_PATH;
+use winapi::shared::minwindef::HINSTANCE;
 use winapi::shared::windef::HWND;
 use winapi::shared::ntdef::WCHAR;
-// use winapi::shared::ntdef::LPWSTR;
 use winapi::um::winuser::EnumWindows;
 use winapi::um::winuser::GetWindowTextW;
 use winapi::um::winuser::IsWindowVisible;
+use winapi::um::winuser::GetWindowThreadProcessId;
+use winapi::um::winnt::HANDLE;
+use winapi::um::winnt::{PROCESS_QUERY_INFORMATION, PROCESS_VM_READ};
+use winapi::um::processthreadsapi::OpenProcess;
+use winapi::um::libloaderapi::GetModuleFileNameW;
+use winapi::um::handleapi::CloseHandle;
 
 #[cfg(windows)]
 fn print_message(msg: &str) -> Result<i32, Error> {
@@ -37,8 +45,14 @@ unsafe extern "system" fn window_info_callback(
     let mut text: [WCHAR; 64] = [0; 64];
     let is_visible = IsWindowVisible(hwnd) != 0;
     if is_visible {
+        let mut proc_id: DWORD = 0;
+        let mut module_name: [WCHAR; MAX_PATH] = [0; MAX_PATH];
         GetWindowTextW(hwnd, text.as_mut_ptr(), 64);
-        println!("{:?}: {}", hwnd, String::from_utf16(&text).unwrap());
+        GetWindowThreadProcessId(hwnd, &mut proc_id);
+        let process_handle: HANDLE = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, proc_id);
+        GetModuleFileNameW(process_handle as HINSTANCE, module_name.as_mut_ptr(), MAX_PATH as u32);
+        CloseHandle(process_handle);
+        println!("{:?}: {} ------- {}", hwnd, String::from_utf16(&text).unwrap(), String::from_utf16(&module_name).unwrap());
     }
     1
 }
