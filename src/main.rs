@@ -27,11 +27,25 @@ use winapi::um::processthreadsapi::OpenProcess;
 use winapi::um::psapi::GetModuleFileNameExW;
 use winapi::um::handleapi::CloseHandle;
 
+const MAX_WINDOW_TITLE: usize = 128;
+
 // TODO list
 // [x] Create ls command
 // [x]   Implement to print all visible windows
 // [ ] Create apply command
 // [ ]   Implement to load profile file and apply settings
+
+#[derive(Debug)]
+pub struct WindowInfo {
+    pub window_title: String,
+    pub window_process: String,
+    pub x: u32,
+    pub y: u32,
+    pub width: u32,
+    pub height: u32,
+}
+
+static mut window_list: Option<Vec<WindowInfo>> = None;
 
 #[cfg(windows)]
 fn print_message(msg: &str) -> Result<i32, Error> {
@@ -54,12 +68,50 @@ fn print_message(msg: &str) -> Result<(), Error> {
     Ok(())
 }
 
+fn get_window_title(hwnd: HWND) -> String {
+    let mut window_title: [WCHAR; MAX_WINDOW_TITLE] = [0; MAX_WINDOW_TITLE];
+    unsafe {
+        GetWindowTextW(hwnd, window_title.as_mut_ptr(), MAX_WINDOW_TITLE as i32);
+    }
+    let mut window_title = window_title.to_vec();
+    if let Some(first) = window_title.iter().position(|&b| b == 0) {
+        window_title.truncate(first);
+    }
+    String::from_utf16(&window_title).unwrap()
+}
+
+fn get_window_process(hwnd: HWND) -> String {
+    let mut proc_id: DWORD = 0;
+    let mut window_process: [WCHAR; MAX_PATH] = [0; MAX_PATH];
+    unsafe {
+        GetWindowThreadProcessId(hwnd, &mut proc_id);
+        let process_handle: HANDLE = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, proc_id);
+        GetModuleFileNameExW(process_handle, NULL as HINSTANCE, window_process.as_mut_ptr(), MAX_PATH as u32);
+        CloseHandle(process_handle);
+    }
+    let mut window_process = window_process.to_vec();
+    if let Some(first) = window_process.iter().position(|&b| b == 0) {
+        window_process.truncate(first)
+    }
+    String::from_utf16(&window_process).unwrap()
+}
+
+fn basename(path: &str) -> String {
+    let path = Path::new(&path);
+    let window_process = match path.file_name() {
+        Some(path) => {
+            path.to_str().unwrap()
+        },
+        None => { "" }
+    };
+    window_process.to_owned()
+}
+
 #[cfg(windows)]
 unsafe extern "system" fn window_info_callback(
     hwnd: HWND,
     _l_param: LPARAM
 ) -> i32 {
-    let mut text: [WCHAR; 64] = [0; 64];
     let is_visible = IsWindowVisible(hwnd) != 0;
     let window_exstyle = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
     let is_visible_on_screen = (window_exstyle & WS_EX_WINDOWEDGE as isize) != 0;
@@ -67,38 +119,19 @@ unsafe extern "system" fn window_info_callback(
     // let is_noredirectionbitmap = (window_exstyle & WS_EX_NOREDIRECTIONBITMAP as isize) != 0;
     let window_style = GetWindowLongPtrW(hwnd, GWL_STYLE);
     if is_visible && is_visible_on_screen && !is_toolwindow {
-        let mut proc_id: DWORD = 0;
-        let mut module_name: [WCHAR; MAX_PATH] = [0; MAX_PATH];
         let mut dimensions = RECT { left: 0, top: 0, right: 0, bottom: 0 };
         let dimptr = &mut dimensions as *mut RECT;
-        GetWindowTextW(hwnd, text.as_mut_ptr(), 64);
-        let mut text = text.to_vec();
-        if let Some(first) = text.iter().position(|&b| b == 0) {
-            text.truncate(first);
-        }
-        GetWindowThreadProcessId(hwnd, &mut proc_id);
         GetWindowRect(hwnd, dimptr);
-        let process_handle: HANDLE = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, proc_id);
-        GetModuleFileNameExW(process_handle, NULL as HINSTANCE, module_name.as_mut_ptr(), MAX_PATH as u32);
-        CloseHandle(process_handle);
-        let mut module_name = module_name.to_vec();
-        if let Some(first) = module_name.iter().position(|&b| b == 0) {
-            module_name.truncate(first)
-        }
-        let process_name = String::from_utf16(&module_name).unwrap();
-        let process_path = Path::new(&process_name);
-        let process_name = match process_path.file_name() {
-            Some(path) => {
-                path.to_str().unwrap()
-            },
-            None => { "" }
-        };
-        if process_name == "explorer.exe" {
-            if !text.is_empty() {
+
+        let window_title = get_window_title(hwnd);
+        let window_process = get_window_process(hwnd);
+        let window_process = basename(&window_process);
+        if window_process == "explorer.exe" {
+            if !window_title.is_empty() {
                 println!("[{:?}] {}\n\t{}\n\t({}, {})\n\t{}, {}\n\tEX_STYLE: {} (0x{:x})\n\tSTYLE: (0x{:x})",
                     hwnd,
-                    String::from_utf16(&text).unwrap(),
-                    String::from_utf16(&module_name).unwrap(),
+                    window_title,
+                    window_process,
                     dimensions.top,
                     dimensions.bottom,
                     dimensions.left,
@@ -107,12 +140,27 @@ unsafe extern "system" fn window_info_callback(
                     window_exstyle,
                     window_style,
                 );
+                match &mut window_list {
+                    Some(list) => {
+                        list.push(WindowInfo {
+                            window_title,
+                            window_process,
+                            x: 0,
+                            y: 0,
+                            width: 0,
+                            height: 0,
+                        });
+                    },
+                    None => {
+                        window_list = Some(Vec::new());
+                    }
+                }
             }
         } else {
             println!("[{:?}] {}\n\t{}\n\t({}, {})\n\t{}, {}\n\tEX_STYLE: {} (0x{:x})\n\tSTYLE: (0x{:x})",
                 hwnd,
-                String::from_utf16(&text).unwrap(),
-                String::from_utf16(&module_name).unwrap(),
+                window_title,
+                window_process,
                 dimensions.top,
                 dimensions.bottom,
                 dimensions.left,
@@ -121,6 +169,21 @@ unsafe extern "system" fn window_info_callback(
                 window_exstyle,
                 window_style,
             );
+            match &mut window_list {
+                Some(list) => {
+                    list.push(WindowInfo {
+                        window_title,
+                        window_process,
+                        x: 0,
+                        y: 0,
+                        width: 0,
+                        height: 0,
+                    });
+                },
+                None => {
+                    window_list = Some(Vec::new());
+                }
+            }
         }
     }
     1
@@ -140,9 +203,18 @@ fn main() {
         .subcommand(SubCommand::with_name("ls")
             .about("lists active windows and their properies"))
         .get_matches();
-    if let Some(matches) = matches.subcommand_matches("ls") {
+    if let Some(_matches) = matches.subcommand_matches("ls") {
         unsafe {
             EnumWindows(Some(window_info_callback), 0);
+            // TODO is there a way to access window_list in a safe manner?
+            match &window_list {
+                Some(list) => {
+                    for w in list {
+                        println!("{:?}", w);
+                    }
+                },
+                None => {}
+            }
         }
     }
 }
