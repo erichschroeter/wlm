@@ -16,9 +16,9 @@ use winapi::um::winuser::IsWindowVisible;
 use winapi::um::winuser::GetWindowThreadProcessId;
 use winapi::um::winuser::GetWindowRect;
 use winapi::um::winuser::GetWindowLongPtrW;
-use winapi::um::winuser::GWL_EXSTYLE;
+use winapi::um::winuser::{GWL_EXSTYLE, GWL_STYLE};
 use winapi::um::winuser::WS_EX_APPWINDOW;
-use winapi::um::winuser::WS_EX_WINDOWEDGE;
+use winapi::um::winuser::{WS_EX_WINDOWEDGE, WS_EX_TOOLWINDOW, WS_EX_NOREDIRECTIONBITMAP};
 use winapi::um::winnt::HANDLE;
 use winapi::um::winnt::{PROCESS_QUERY_INFORMATION, PROCESS_VM_READ};
 use winapi::um::processthreadsapi::OpenProcess;
@@ -53,9 +53,12 @@ unsafe extern "system" fn window_info_callback(
 ) -> i32 {
     let mut text: [WCHAR; 64] = [0; 64];
     let is_visible = IsWindowVisible(hwnd) != 0;
-    let window_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
-    let is_visible_on_screen = (window_style & WS_EX_WINDOWEDGE as isize) != 0;
-    if is_visible && is_visible_on_screen {
+    let window_exstyle = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+    let is_visible_on_screen = (window_exstyle & WS_EX_WINDOWEDGE as isize) != 0;
+    let is_toolwindow = (window_exstyle & WS_EX_TOOLWINDOW as isize) != 0;
+    // let is_noredirectionbitmap = (window_exstyle & WS_EX_NOREDIRECTIONBITMAP as isize) != 0;
+    let window_style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+    if is_visible && is_visible_on_screen && !is_toolwindow {
         let mut proc_id: DWORD = 0;
         let mut module_name: [WCHAR; MAX_PATH] = [0; MAX_PATH];
         let mut dimensions = RECT { left: 0, top: 0, right: 0, bottom: 0 };
@@ -84,7 +87,7 @@ unsafe extern "system" fn window_info_callback(
         };
         if process_name == "explorer.exe" {
             if !text.is_empty() {
-                println!("[{:?}] {}\n\t{}\n\t({}, {})\n\t{}, {},\n\tIS_APPWINDOW: {} (0x{:x})",
+                println!("[{:?}] {}\n\t{}\n\t({}, {})\n\t{}, {}\n\tEX_STYLE: {} (0x{:x})\n\tSTYLE: (0x{:x})",
                     hwnd,
                     String::from_utf16(&text).unwrap(),
                     String::from_utf16(&module_name).unwrap(),
@@ -93,11 +96,12 @@ unsafe extern "system" fn window_info_callback(
                     dimensions.left,
                     dimensions.right,
                     is_visible_on_screen,
+                    window_exstyle,
                     window_style,
                 );
             }
         } else {
-            println!("[{:?}] {}\n\t{}\n\t({}, {})\n\t{}, {},\n\tIS_APPWINDOW: {} (0x{:x})",
+            println!("[{:?}] {}\n\t{}\n\t({}, {})\n\t{}, {}\n\tEX_STYLE: {} (0x{:x})\n\tSTYLE: (0x{:x})",
                 hwnd,
                 String::from_utf16(&text).unwrap(),
                 String::from_utf16(&module_name).unwrap(),
@@ -106,6 +110,7 @@ unsafe extern "system" fn window_info_callback(
                 dimensions.left,
                 dimensions.right,
                 is_visible_on_screen,
+                window_exstyle,
                 window_style,
             );
         }
