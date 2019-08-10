@@ -36,13 +36,23 @@ const MAX_WINDOW_TITLE: usize = 128;
 // [ ]   Implement to load profile file and apply settings
 
 #[derive(Debug)]
+pub struct Location {
+    pub x: i32,
+    pub y: i32,
+}
+
+#[derive(Debug)]
+pub struct Dimensions {
+    pub width: i32,
+    pub height: i32,
+}
+
+#[derive(Debug)]
 pub struct WindowInfo {
     pub window_title: String,
     pub window_process: String,
-    pub x: u32,
-    pub y: u32,
-    pub width: u32,
-    pub height: u32,
+    pub location: Location,
+    pub dimensions: Dimensions,
 }
 
 static mut window_list: Option<Vec<WindowInfo>> = None;
@@ -107,6 +117,24 @@ fn basename(path: &str) -> String {
     window_process.to_owned()
 }
 
+fn get_window_dimensions(hwnd: HWND) -> (Location, Dimensions) {
+    let mut dimensions = RECT { left: 0, top: 0, right: 0, bottom: 0 };
+    let dimptr = &mut dimensions as *mut RECT;
+    unsafe {
+        GetWindowRect(hwnd, dimptr);
+    }
+    (
+        Location {
+            x: dimensions.left,
+            y: dimensions.top,
+        },
+        Dimensions {
+            width: dimensions.right - dimensions.left,
+            height: dimensions.bottom - dimensions.top,
+        }
+    )
+}
+
 #[cfg(windows)]
 unsafe extern "system" fn window_info_callback(
     hwnd: HWND,
@@ -119,10 +147,7 @@ unsafe extern "system" fn window_info_callback(
     // let is_noredirectionbitmap = (window_exstyle & WS_EX_NOREDIRECTIONBITMAP as isize) != 0;
     let window_style = GetWindowLongPtrW(hwnd, GWL_STYLE);
     if is_visible && is_visible_on_screen && !is_toolwindow {
-        let mut dimensions = RECT { left: 0, top: 0, right: 0, bottom: 0 };
-        let dimptr = &mut dimensions as *mut RECT;
-        GetWindowRect(hwnd, dimptr);
-
+        let (location, dimensions) = get_window_dimensions(hwnd);
         let window_title = get_window_title(hwnd);
         let window_process = get_window_process(hwnd);
         let window_process = basename(&window_process);
@@ -132,10 +157,10 @@ unsafe extern "system" fn window_info_callback(
                     hwnd,
                     window_title,
                     window_process,
-                    dimensions.top,
-                    dimensions.bottom,
-                    dimensions.left,
-                    dimensions.right,
+                    location.x,
+                    location.y,
+                    dimensions.width,
+                    dimensions.height,
                     is_visible_on_screen,
                     window_exstyle,
                     window_style,
@@ -145,10 +170,14 @@ unsafe extern "system" fn window_info_callback(
                         list.push(WindowInfo {
                             window_title,
                             window_process,
-                            x: 0,
-                            y: 0,
-                            width: 0,
-                            height: 0,
+                            location: Location {
+                                x: location.x,
+                                y: location.y,
+                            },
+                            dimensions: Dimensions {
+                                width: dimensions.width,
+                                height: dimensions.height,
+                            }
                         });
                     },
                     None => {
@@ -161,10 +190,10 @@ unsafe extern "system" fn window_info_callback(
                 hwnd,
                 window_title,
                 window_process,
-                dimensions.top,
-                dimensions.bottom,
-                dimensions.left,
-                dimensions.right,
+                location.x,
+                location.y,
+                dimensions.width,
+                dimensions.height,
                 is_visible_on_screen,
                 window_exstyle,
                 window_style,
@@ -174,10 +203,14 @@ unsafe extern "system" fn window_info_callback(
                     list.push(WindowInfo {
                         window_title,
                         window_process,
-                        x: 0,
-                        y: 0,
-                        width: 0,
-                        height: 0,
+                        location: Location {
+                            x: location.x,
+                            y: location.y,
+                        },
+                        dimensions: Dimensions {
+                            width: dimensions.width,
+                            height: dimensions.height,
+                        }
                     });
                 },
                 None => {
