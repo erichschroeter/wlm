@@ -1,9 +1,7 @@
 extern crate clap;
 use clap::{Arg, App, SubCommand};
 #[cfg(windows)] extern crate winapi;
-use std::io::Error;
 use std::path::Path;
-use std::ffi::OsStr;
 use winapi::shared::minwindef::LPARAM;
 use winapi::shared::minwindef::DWORD;
 use winapi::shared::minwindef::MAX_PATH;
@@ -18,9 +16,8 @@ use winapi::um::winuser::IsWindowVisible;
 use winapi::um::winuser::GetWindowThreadProcessId;
 use winapi::um::winuser::GetWindowRect;
 use winapi::um::winuser::GetWindowLongPtrW;
-use winapi::um::winuser::{GWL_EXSTYLE, GWL_STYLE};
-use winapi::um::winuser::WS_EX_APPWINDOW;
-use winapi::um::winuser::{WS_EX_WINDOWEDGE, WS_EX_TOOLWINDOW, WS_EX_NOREDIRECTIONBITMAP};
+use winapi::um::winuser::GWL_EXSTYLE;
+use winapi::um::winuser::{WS_EX_WINDOWEDGE, WS_EX_TOOLWINDOW};
 use winapi::um::winnt::HANDLE;
 use winapi::um::winnt::{PROCESS_QUERY_INFORMATION, PROCESS_VM_READ};
 use winapi::um::processthreadsapi::OpenProcess;
@@ -49,34 +46,14 @@ pub struct Dimensions {
 
 #[derive(Debug)]
 pub struct WindowInfo {
+    pub hwnd: HWND,
     pub window_title: String,
     pub window_process: String,
     pub location: Location,
     pub dimensions: Dimensions,
 }
 
-static mut window_list: Option<Vec<WindowInfo>> = None;
-
-#[cfg(windows)]
-fn print_message(msg: &str) -> Result<i32, Error> {
-    use std::ffi::OsStr;
-    use std::iter::once;
-    use std::os::windows::ffi::OsStrExt;
-    use std::ptr::null_mut;
-    use winapi::um::winuser::{MB_OK, MessageBoxW};
-    let wide: Vec<u16> = OsStr::new(msg).encode_wide().chain(once(0)).collect();
-    let ret = unsafe {
-        MessageBoxW(null_mut(), wide.as_ptr(), wide.as_ptr(), MB_OK)
-    };
-    if ret == 0 { Err(Error::last_os_error()) }
-    else { Ok(ret) }
-}
-
-#[cfg(not(windows))]
-fn print_message(msg: &str) -> Result<(), Error> {
-    println!("{}", msg);
-    Ok(())
-}
+static mut WINDOW_LIST: Option<Vec<WindowInfo>> = None;
 
 fn get_window_title(hwnd: HWND) -> String {
     let mut window_title: [WCHAR; MAX_WINDOW_TITLE] = [0; MAX_WINDOW_TITLE];
@@ -135,6 +112,21 @@ fn get_window_dimensions(hwnd: HWND) -> (Location, Dimensions) {
     )
 }
 
+fn add_window(window: WindowInfo) {
+    unsafe {
+        match &mut WINDOW_LIST {
+            Some(list) => {
+                list.push(window);
+            },
+            None => {
+                let mut list = Vec::new();
+                list.push(window);
+                WINDOW_LIST = Some(list);
+            }
+        }
+    }
+}
+
 #[cfg(windows)]
 unsafe extern "system" fn window_info_callback(
     hwnd: HWND,
@@ -144,8 +136,6 @@ unsafe extern "system" fn window_info_callback(
     let window_exstyle = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
     let is_visible_on_screen = (window_exstyle & WS_EX_WINDOWEDGE as isize) != 0;
     let is_toolwindow = (window_exstyle & WS_EX_TOOLWINDOW as isize) != 0;
-    // let is_noredirectionbitmap = (window_exstyle & WS_EX_NOREDIRECTIONBITMAP as isize) != 0;
-    let window_style = GetWindowLongPtrW(hwnd, GWL_STYLE);
     if is_visible && is_visible_on_screen && !is_toolwindow {
         let (location, dimensions) = get_window_dimensions(hwnd);
         let window_title = get_window_title(hwnd);
@@ -153,70 +143,34 @@ unsafe extern "system" fn window_info_callback(
         let window_process = basename(&window_process);
         if window_process == "explorer.exe" {
             if !window_title.is_empty() {
-                println!("[{:?}] {}\n\t{}\n\t({}, {})\n\t{}, {}\n\tEX_STYLE: {} (0x{:x})\n\tSTYLE: (0x{:x})",
+                add_window(WindowInfo {
                     hwnd,
                     window_title,
                     window_process,
-                    location.x,
-                    location.y,
-                    dimensions.width,
-                    dimensions.height,
-                    is_visible_on_screen,
-                    window_exstyle,
-                    window_style,
-                );
-                match &mut window_list {
-                    Some(list) => {
-                        list.push(WindowInfo {
-                            window_title,
-                            window_process,
-                            location: Location {
-                                x: location.x,
-                                y: location.y,
-                            },
-                            dimensions: Dimensions {
-                                width: dimensions.width,
-                                height: dimensions.height,
-                            }
-                        });
+                    location: Location {
+                        x: location.x,
+                        y: location.y,
                     },
-                    None => {
-                        window_list = Some(Vec::new());
+                    dimensions: Dimensions {
+                        width: dimensions.width,
+                        height: dimensions.height,
                     }
-                }
+                });
             }
         } else {
-            println!("[{:?}] {}\n\t{}\n\t({}, {})\n\t{}, {}\n\tEX_STYLE: {} (0x{:x})\n\tSTYLE: (0x{:x})",
+            add_window(WindowInfo {
                 hwnd,
                 window_title,
                 window_process,
-                location.x,
-                location.y,
-                dimensions.width,
-                dimensions.height,
-                is_visible_on_screen,
-                window_exstyle,
-                window_style,
-            );
-            match &mut window_list {
-                Some(list) => {
-                    list.push(WindowInfo {
-                        window_title,
-                        window_process,
-                        location: Location {
-                            x: location.x,
-                            y: location.y,
-                        },
-                        dimensions: Dimensions {
-                            width: dimensions.width,
-                            height: dimensions.height,
-                        }
-                    });
+                location: Location {
+                    x: location.x,
+                    y: location.y,
                 },
-                None => {
-                    window_list = Some(Vec::new());
+                dimensions: Dimensions {
+                    width: dimensions.width,
+                    height: dimensions.height,
                 }
-            }
+            });
         }
     }
     1
@@ -239,8 +193,8 @@ fn main() {
     if let Some(_matches) = matches.subcommand_matches("ls") {
         unsafe {
             EnumWindows(Some(window_info_callback), 0);
-            // TODO is there a way to access window_list in a safe manner?
-            match &window_list {
+            // TODO is there a way to access WINDOW_LIST in a safe manner?
+            match &WINDOW_LIST {
                 Some(list) => {
                     for w in list {
                         println!("{:?}", w);
