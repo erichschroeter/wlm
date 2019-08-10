@@ -15,6 +15,10 @@ use winapi::um::winuser::GetWindowTextW;
 use winapi::um::winuser::IsWindowVisible;
 use winapi::um::winuser::GetWindowThreadProcessId;
 use winapi::um::winuser::GetWindowRect;
+use winapi::um::winuser::GetWindowLongPtrW;
+use winapi::um::winuser::GWL_EXSTYLE;
+use winapi::um::winuser::WS_EX_APPWINDOW;
+use winapi::um::winuser::WS_EX_WINDOWEDGE;
 use winapi::um::winnt::HANDLE;
 use winapi::um::winnt::{PROCESS_QUERY_INFORMATION, PROCESS_VM_READ};
 use winapi::um::processthreadsapi::OpenProcess;
@@ -49,7 +53,9 @@ unsafe extern "system" fn window_info_callback(
 ) -> i32 {
     let mut text: [WCHAR; 64] = [0; 64];
     let is_visible = IsWindowVisible(hwnd) != 0;
-    if is_visible {
+    let window_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+    let is_visible_on_screen = (window_style & WS_EX_WINDOWEDGE as isize) != 0;
+    if is_visible && is_visible_on_screen {
         let mut proc_id: DWORD = 0;
         let mut module_name: [WCHAR; MAX_PATH] = [0; MAX_PATH];
         let mut dimensions = RECT { left: 0, top: 0, right: 0, bottom: 0 };
@@ -78,25 +84,29 @@ unsafe extern "system" fn window_info_callback(
         };
         if process_name == "explorer.exe" {
             if !text.is_empty() {
-                println!("[{:?}] {}\n\t{}\n\t({}, {})\n\t{}, {}",
+                println!("[{:?}] {}\n\t{}\n\t({}, {})\n\t{}, {},\n\tIS_APPWINDOW: {} (0x{:x})",
                     hwnd,
                     String::from_utf16(&text).unwrap(),
                     String::from_utf16(&module_name).unwrap(),
                     dimensions.top,
                     dimensions.bottom,
                     dimensions.left,
-                    dimensions.right
+                    dimensions.right,
+                    is_visible_on_screen,
+                    window_style,
                 );
             }
         } else {
-            println!("[{:?}] {}\n\t{}\n\t({}, {})\n\t{}, {}",
+            println!("[{:?}] {}\n\t{}\n\t({}, {})\n\t{}, {},\n\tIS_APPWINDOW: {} (0x{:x})",
                 hwnd,
                 String::from_utf16(&text).unwrap(),
                 String::from_utf16(&module_name).unwrap(),
                 dimensions.top,
                 dimensions.bottom,
                 dimensions.left,
-                dimensions.right
+                dimensions.right,
+                is_visible_on_screen,
+                window_style,
             );
         }
     }
