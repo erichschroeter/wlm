@@ -1,6 +1,7 @@
 extern crate clap;
 use clap::{Arg, App, SubCommand};
 #[cfg(windows)] extern crate winapi;
+use std::fmt;
 use std::path::Path;
 use winapi::shared::minwindef::LPARAM;
 use winapi::shared::minwindef::DWORD;
@@ -54,6 +55,24 @@ pub struct WindowInfo {
 }
 
 static mut WINDOW_LIST: Option<Vec<WindowInfo>> = None;
+
+impl fmt::Display for Location {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "({}, {})", self.x, self.y)
+    }
+}
+
+impl fmt::Display for Dimensions {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} x {}", self.width, self.height)
+    }
+}
+
+impl fmt::Display for WindowInfo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[{:?}]\n\t\"{}\"\n\t{}\n\t{}\n\t{}", self.hwnd, self.window_title, self.window_process, self.location, self.dimensions)
+    }
+}
 
 fn get_window_title(hwnd: HWND) -> String {
     let mut window_title: [WCHAR; MAX_WINDOW_TITLE] = [0; MAX_WINDOW_TITLE];
@@ -197,7 +216,7 @@ fn main() {
             match &WINDOW_LIST {
                 Some(list) => {
                     for w in list {
-                        println!("{:?}", w);
+                        println!("{}", w);
                     }
                 },
                 None => {}
