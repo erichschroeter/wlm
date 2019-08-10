@@ -206,21 +206,27 @@ fn main() {
             .takes_value(true))
         .subcommand(SubCommand::with_name("ls")
             .about("lists active windows and their properies"))
-        .subcommand(SubCommand::with_name("ls")
-            .about("lists active windows and their properies"))
+        .subcommand(SubCommand::with_name("apply")
+            .about("apply a profile to active windows"))
         .get_matches();
-    if let Some(_matches) = matches.subcommand_matches("ls") {
-        unsafe {
-            EnumWindows(Some(window_info_callback), 0);
-            // TODO is there a way to access WINDOW_LIST in a safe manner?
-            match &WINDOW_LIST {
-                Some(list) => {
-                    for w in list {
-                        println!("{}", w);
-                    }
-                },
-                None => {}
+    match matches.subcommand() {
+        ("ls", Some(_)) => {
+            unsafe {
+                EnumWindows(Some(window_info_callback), 0);
+                // TODO is there a way to access WINDOW_LIST in a safe manner?
+                match &WINDOW_LIST {
+                    Some(list) => {
+                        for w in list {
+                            println!("{}", w);
+                        }
+                    },
+                    None => {}
+                }
             }
+        },
+        ("apply", Some(_)) => {
+            unimplemented!();
         }
+        _ => {}
     }
 }
