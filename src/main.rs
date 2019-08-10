@@ -1,8 +1,10 @@
 extern crate clap;
 use clap::{Arg, App, SubCommand};
-#[cfg(windows)] extern crate winapi;
+use serde::Serialize;
+use serde_json::Result;
 use std::fmt;
 use std::path::Path;
+#[cfg(windows)] extern crate winapi;
 use winapi::shared::minwindef::LPARAM;
 use winapi::shared::minwindef::DWORD;
 use winapi::shared::minwindef::MAX_PATH;
@@ -33,20 +35,21 @@ const MAX_WINDOW_TITLE: usize = 128;
 // [ ] Create apply command
 // [ ]   Implement to load profile file and apply settings
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct Location {
     pub x: i32,
     pub y: i32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct Dimensions {
     pub width: i32,
     pub height: i32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct WindowInfo {
+    #[serde(skip_serializing)]
     pub hwnd: HWND,
     pub window_title: String,
     pub window_process: String,
@@ -205,19 +208,26 @@ fn main() {
             .help("Sets the profile to be loaded")
             .takes_value(true))
         .subcommand(SubCommand::with_name("ls")
-            .about("lists active windows and their properies"))
+            .about("lists active windows and their properies")
+            .arg(Arg::with_name("as-profile")
+                .help("Export list of active windows as a profile")
+                .long("as-profile")))
         .subcommand(SubCommand::with_name("apply")
             .about("apply a profile to active windows"))
         .get_matches();
     match matches.subcommand() {
-        ("ls", Some(_)) => {
+        ("ls", Some(m)) => {
             unsafe {
                 EnumWindows(Some(window_info_callback), 0);
                 // TODO is there a way to access WINDOW_LIST in a safe manner?
                 match &WINDOW_LIST {
                     Some(list) => {
-                        for w in list {
-                            println!("{}", w);
+                        if m.is_present("as-profile") {
+                            print!("{}", serde_json::to_string_pretty(&list).unwrap_or_default());
+                        } else {
+                            for w in list {
+                                println!("{}", w);
+                            }
                         }
                     },
                     None => {}
