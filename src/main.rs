@@ -1,3 +1,5 @@
+extern crate clap;
+use clap::{Arg, App, SubCommand};
 #[cfg(windows)] extern crate winapi;
 use std::io::Error;
 use std::path::Path;
@@ -24,6 +26,12 @@ use winapi::um::winnt::{PROCESS_QUERY_INFORMATION, PROCESS_VM_READ};
 use winapi::um::processthreadsapi::OpenProcess;
 use winapi::um::psapi::GetModuleFileNameExW;
 use winapi::um::handleapi::CloseHandle;
+
+// TODO list
+// [x] Create ls command
+// [x]   Implement to print all visible windows
+// [ ] Create apply command
+// [ ]   Implement to load profile file and apply settings
 
 #[cfg(windows)]
 fn print_message(msg: &str) -> Result<i32, Error> {
@@ -119,7 +127,22 @@ unsafe extern "system" fn window_info_callback(
 }
 
 fn main() {
-    unsafe {
-        EnumWindows(Some(window_info_callback), 5);
+    let matches = App::new("window-layout-manager")
+        .version("1.0")
+        .about("Applies window properties based on profile settings.")
+        .arg(Arg::with_name("profile")
+            .long("profile")
+            .value_name("FILE")
+            .help("Sets the profile to be loaded")
+            .takes_value(true))
+        .subcommand(SubCommand::with_name("ls")
+            .about("lists active windows and their properies"))
+        .subcommand(SubCommand::with_name("ls")
+            .about("lists active windows and their properies"))
+        .get_matches();
+    if let Some(matches) = matches.subcommand_matches("ls") {
+        unsafe {
+            EnumWindows(Some(window_info_callback), 0);
+        }
     }
 }
