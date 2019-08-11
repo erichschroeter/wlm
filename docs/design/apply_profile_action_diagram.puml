@@ -1,0 +1,20 @@
+@startuml "Applying a profile"
+
+note left
+    Profile is loaded
+end note
+
+(*) --> "Next WindowInfo"
+if "Next WindowInfo exists?"
+    -->[true] "Find HWND based on profile properties"
+    if "HWND exists?" then
+        -->[true] "Apply profile properties"
+        --> (*)
+    else
+        -->[false] "Next WindowInfo"
+    endif
+else
+    -->[false] (*)
+endif
+
+@enduml

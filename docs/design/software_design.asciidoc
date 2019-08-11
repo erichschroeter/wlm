@@ -54,3 +54,11 @@ window-layout-manager apply myprofile.json
 ----
 window-layout-manager ls
 ----
+
+== Applying a profile
+
+.Applying Profile Action Diagram
+[plantuml,align="center"]
+----
+include::apply_profile_action_diagram.puml[]
+----
