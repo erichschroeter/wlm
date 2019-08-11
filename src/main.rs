@@ -50,7 +50,7 @@ pub struct Properties {
     pub hwnd: u64,
     pub title: String,
     pub process: String,
-    pub location: Location,
+    pub location: Option<Location>,
     pub dimensions: Option<Dimensions>,
 }
 
@@ -82,10 +82,24 @@ impl fmt::Display for Properties {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.dimensions {
             Some(dimensions) => {
-                write!(f, "[{:?}]\n\t\"{}\"\n\t{}\n\t{}\n\t{}", self.hwnd, self.title, self.process, self.location, dimensions)
+                match &self.location {
+                    Some(location) => {
+                        write!(f, "[{:?}]\n\t\"{}\"\n\t{}\n\t{}\n\t{}", self.hwnd, self.title, self.process, location, dimensions)
+                    },
+                    None => {
+                        write!(f, "[{:?}]\n\t\"{}\"\n\t{}\n\t{}", self.hwnd, self.title, self.process, dimensions)
+                    }
+                }
             },
             None => {
-                write!(f, "[{:?}]\n\t\"{}\"\n\t{}\n\t{}", self.hwnd, self.title, self.process, self.location)
+                match &self.location {
+                    Some(location) => {
+                        write!(f, "[{:?}]\n\t\"{}\"\n\t{}\n\t{}", self.hwnd, self.title, self.process, location)
+                    },
+                    None => {
+                        write!(f, "[{:?}]\n\t\"{}\"\n\t{}", self.hwnd, self.title, self.process)
+                    }
+                }
             }
         }
     }
@@ -163,30 +177,30 @@ fn add_window(window: Properties) {
     }
 }
 
-fn change_window_properties(hwnd: HWND, window: &Properties) {
-    match &window.dimensions {
-        Some(dimensions) => {
-            unsafe {
-                let mut hdwp = BeginDeferWindowPos(1);
-                if hdwp != NULL {
-                    hdwp = DeferWindowPos(
-                        hdwp,
-                        hwnd,
-                        WM_NULL as HWND,
-                        window.location.x,
-                        window.location.y,
-                        dimensions.width,
-                        dimensions.height,
-                        SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE);
-                }
-                if hdwp != NULL {
-                    EndDeferWindowPos(hdwp);
-                }
-            }
-        },
-        None => {}
-    }
-}
+// fn change_window_properties(hwnd: HWND, window: &Properties) {
+//     match &window.dimensions {
+//         Some(dimensions) => {
+//             unsafe {
+//                 let mut hdwp = BeginDeferWindowPos(1);
+//                 if hdwp != NULL {
+//                     hdwp = DeferWindowPos(
+//                         hdwp,
+//                         hwnd,
+//                         WM_NULL as HWND,
+//                         window.location.x,
+//                         window.location.y,
+//                         dimensions.width,
+//                         dimensions.height,
+//                         SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE);
+//                 }
+//                 if hdwp != NULL {
+//                     EndDeferWindowPos(hdwp);
+//                 }
+//             }
+//         },
+//         None => {}
+//     }
+// }
 
 #[cfg(windows)]
 unsafe extern "system" fn apply_profile_callback(
@@ -200,21 +214,52 @@ unsafe extern "system" fn apply_profile_callback(
             for window in list {
                 if title == window.title && basename(&process) == window.process {
                     match G_DEFER_HDWP {
-                        Some(hdwp) => {
-                            let old_hdwp = G_DEFER_HDWP.unwrap();
+                        Some(old_hdwp) => {
                             match &window.dimensions {
                                 Some(dimensions) => {
-                                    G_DEFER_HDWP = Some(DeferWindowPos(
-                                        old_hdwp,
-                                        hwnd,
-                                        WM_NULL as HWND,
-                                        window.location.x,
-                                        window.location.y,
-                                        dimensions.width,
-                                        dimensions.height,
-                                        SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE));
+                                    match &window.location {
+                                        Some(location) => {
+                                            G_DEFER_HDWP = Some(DeferWindowPos(
+                                                old_hdwp,
+                                                hwnd,
+                                                WM_NULL as HWND,
+                                                location.x,
+                                                location.y,
+                                                dimensions.width,
+                                                dimensions.height,
+                                                SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE));
+                                        },
+                                        None => {
+                                            // TODO use SWP_NOMOVE to ignore x and y parameters
+                                            // G_DEFER_HDWP = Some(DeferWindowPos(
+                                            //     old_hdwp,
+                                            //     hwnd,
+                                            //     WM_NULL as HWND,
+                                            //     window.location.x,
+                                            //     window.location.y,
+                                            //     dimensions.width,
+                                            //     dimensions.height,
+                                            //     SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE));
+                                        }
+                                    }
                                 },
-                                None => {}
+                                None => {
+                                    match &window.location {
+                                        Some(location) => {
+                                            // TODO use SWP_NOSIZE to ignore cx and cy parameters
+                                            // G_DEFER_HDWP = Some(DeferWindowPos(
+                                            //     old_hdwp,
+                                            //     hwnd,
+                                            //     WM_NULL as HWND,
+                                            //     location.x,
+                                            //     location.y,
+                                            //     dimensions.width,
+                                            //     dimensions.height,
+                                            //     SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE));
+                                        },
+                                        None => {}
+                                    }
+                                }
                             }
                         },
                         None => {}
@@ -247,10 +292,10 @@ unsafe extern "system" fn window_info_callback(
                     hwnd: hwnd as u64,
                     title: window_title,
                     process: window_process,
-                    location: Location {
+                    location: Some(Location {
                         x: location.x,
                         y: location.y,
-                    },
+                    }),
                     dimensions: Some(Dimensions {
                         width: dimensions.width,
                         height: dimensions.height,
@@ -262,10 +307,10 @@ unsafe extern "system" fn window_info_callback(
                 hwnd: hwnd as u64,
                 title: window_title,
                 process: window_process,
-                location: Location {
+                location: Some(Location {
                     x: location.x,
                     y: location.y,
-                },
+                }),
                 dimensions: Some(Dimensions {
                     width: dimensions.width,
                     height: dimensions.height,
