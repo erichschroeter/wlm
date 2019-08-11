@@ -1,7 +1,6 @@
 extern crate clap;
 use clap::{Arg, App, SubCommand};
-use serde::Serialize;
-use serde_json::Result;
+use serde::{Serialize, Deserialize};
 use std::fmt;
 use std::path::Path;
 #[cfg(windows)] extern crate winapi;
@@ -21,6 +20,8 @@ use winapi::um::winuser::GetWindowRect;
 use winapi::um::winuser::GetWindowLongPtrW;
 use winapi::um::winuser::GWL_EXSTYLE;
 use winapi::um::winuser::{WS_EX_WINDOWEDGE, WS_EX_TOOLWINDOW};
+use winapi::um::winuser::{WM_NULL, HDWP, BeginDeferWindowPos, DeferWindowPos, EndDeferWindowPos};
+use winapi::um::winuser::{SWP_NOZORDER, SWP_NOOWNERZORDER, SWP_NOACTIVATE};
 use winapi::um::winnt::HANDLE;
 use winapi::um::winnt::{PROCESS_QUERY_INFORMATION, PROCESS_VM_READ};
 use winapi::um::processthreadsapi::OpenProcess;
@@ -35,22 +36,24 @@ const MAX_WINDOW_TITLE: usize = 128;
 // [ ] Create apply command
 // [ ]   Implement to load profile file and apply settings
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Location {
     pub x: i32,
     pub y: i32,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Dimensions {
     pub width: i32,
     pub height: i32,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct WindowInfo {
+    #[serde(skip_deserializing)]
     #[serde(skip_serializing)]
-    pub hwnd: HWND,
+    // pub hwnd: HWND,
+    pub hwnd: u64,
     pub window_title: String,
     pub window_process: String,
     pub location: Location,
@@ -58,6 +61,10 @@ pub struct WindowInfo {
 }
 
 static mut WINDOW_LIST: Option<Vec<WindowInfo>> = None;
+
+// impl std::default::Default for HWND {
+//     fn default() -> Self { 0 }
+// }
 
 impl fmt::Display for Location {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -149,6 +156,26 @@ fn add_window(window: WindowInfo) {
     }
 }
 
+fn change_window_properties(hwnd: HWND, window: &WindowInfo) {
+    unsafe {
+        let mut hdwp = BeginDeferWindowPos(1);
+        if hdwp != NULL {
+            hdwp = DeferWindowPos(
+                hdwp,
+                hwnd,
+                WM_NULL as HWND,
+                window.location.x,
+                window.location.y,
+                window.dimensions.width,
+                window.dimensions.height,
+                SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE);
+        }
+        if hdwp != NULL {
+            EndDeferWindowPos(hdwp);
+        }
+    }
+}
+
 #[cfg(windows)]
 unsafe extern "system" fn window_info_callback(
     hwnd: HWND,
@@ -166,7 +193,7 @@ unsafe extern "system" fn window_info_callback(
         if window_process == "explorer.exe" {
             if !window_title.is_empty() {
                 add_window(WindowInfo {
-                    hwnd,
+                    hwnd: hwnd as u64,
                     window_title,
                     window_process,
                     location: Location {
@@ -181,7 +208,7 @@ unsafe extern "system" fn window_info_callback(
             }
         } else {
             add_window(WindowInfo {
-                hwnd,
+                hwnd: hwnd as u64,
                 window_title,
                 window_process,
                 location: Location {
@@ -202,18 +229,17 @@ fn main() {
     let matches = App::new("window-layout-manager")
         .version("1.0")
         .about("Applies window properties based on profile settings.")
-        .arg(Arg::with_name("profile")
-            .long("profile")
-            .value_name("FILE")
-            .help("Sets the profile to be loaded")
-            .takes_value(true))
         .subcommand(SubCommand::with_name("ls")
             .about("lists active windows and their properies")
             .arg(Arg::with_name("as-profile")
                 .help("Export list of active windows as a profile")
                 .long("as-profile")))
         .subcommand(SubCommand::with_name("apply")
-            .about("apply a profile to active windows"))
+            .about("apply a profile to active windows")
+            .arg(Arg::with_name("PROFILE")
+                .help("Sets the profile to be loaded")
+                .required(true)
+                .index(1)))
         .get_matches();
     match matches.subcommand() {
         ("ls", Some(m)) => {
@@ -234,8 +260,26 @@ fn main() {
                 }
             }
         },
-        ("apply", Some(_)) => {
-            unimplemented!();
+        ("apply", Some(matches)) => {
+            let profile = matches.value_of("PROFILE").unwrap();
+            let json = std::fs::read_to_string(profile).expect("Failed reading profile");
+            println!("{}", json);
+            let windows: Vec<WindowInfo> = serde_json::from_str(&json).unwrap();
+            println!("{:?}", windows);
+            // let window = WindowInfo {
+            //     hwnd: 0x440716 as HWND,
+            //     window_title: String::from(""),
+            //     window_process: String::from(""),
+            //     location: Location {
+            //         x: 0,
+            //         y: -1000,
+            //     },
+            //     dimensions: Dimensions {
+            //         width: 200,
+            //         height: 100,
+            //     },
+            // };
+            // change_window_properties(window.hwnd, &window);
         }
         _ => {}
     }
