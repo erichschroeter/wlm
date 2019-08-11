@@ -51,7 +51,7 @@ pub struct Properties {
     pub title: String,
     pub process: String,
     pub location: Location,
-    pub dimensions: Dimensions,
+    pub dimensions: Option<Dimensions>,
 }
 
 #[cfg(windows)]
@@ -80,7 +80,14 @@ impl fmt::Display for Dimensions {
 
 impl fmt::Display for Properties {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "[{:?}]\n\t\"{}\"\n\t{}\n\t{}\n\t{}", self.hwnd, self.title, self.process, self.location, self.dimensions)
+        match &self.dimensions {
+            Some(dimensions) => {
+                write!(f, "[{:?}]\n\t\"{}\"\n\t{}\n\t{}\n\t{}", self.hwnd, self.title, self.process, self.location, dimensions)
+            },
+            None => {
+                write!(f, "[{:?}]\n\t\"{}\"\n\t{}\n\t{}", self.hwnd, self.title, self.process, self.location)
+            }
+        }
     }
 }
 
@@ -157,22 +164,27 @@ fn add_window(window: Properties) {
 }
 
 fn change_window_properties(hwnd: HWND, window: &Properties) {
-    unsafe {
-        let mut hdwp = BeginDeferWindowPos(1);
-        if hdwp != NULL {
-            hdwp = DeferWindowPos(
-                hdwp,
-                hwnd,
-                WM_NULL as HWND,
-                window.location.x,
-                window.location.y,
-                window.dimensions.width,
-                window.dimensions.height,
-                SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE);
-        }
-        if hdwp != NULL {
-            EndDeferWindowPos(hdwp);
-        }
+    match &window.dimensions {
+        Some(dimensions) => {
+            unsafe {
+                let mut hdwp = BeginDeferWindowPos(1);
+                if hdwp != NULL {
+                    hdwp = DeferWindowPos(
+                        hdwp,
+                        hwnd,
+                        WM_NULL as HWND,
+                        window.location.x,
+                        window.location.y,
+                        dimensions.width,
+                        dimensions.height,
+                        SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE);
+                }
+                if hdwp != NULL {
+                    EndDeferWindowPos(hdwp);
+                }
+            }
+        },
+        None => {}
     }
 }
 
@@ -190,15 +202,20 @@ unsafe extern "system" fn apply_profile_callback(
                     match G_DEFER_HDWP {
                         Some(hdwp) => {
                             let old_hdwp = G_DEFER_HDWP.unwrap();
-                            G_DEFER_HDWP = Some(DeferWindowPos(
-                                old_hdwp,
-                                hwnd,
-                                WM_NULL as HWND,
-                                window.location.x,
-                                window.location.y,
-                                window.dimensions.width,
-                                window.dimensions.height,
-                                SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE));
+                            match &window.dimensions {
+                                Some(dimensions) => {
+                                    G_DEFER_HDWP = Some(DeferWindowPos(
+                                        old_hdwp,
+                                        hwnd,
+                                        WM_NULL as HWND,
+                                        window.location.x,
+                                        window.location.y,
+                                        dimensions.width,
+                                        dimensions.height,
+                                        SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE));
+                                },
+                                None => {}
+                            }
                         },
                         None => {}
                     }
@@ -234,10 +251,10 @@ unsafe extern "system" fn window_info_callback(
                         x: location.x,
                         y: location.y,
                     },
-                    dimensions: Dimensions {
+                    dimensions: Some(Dimensions {
                         width: dimensions.width,
                         height: dimensions.height,
-                    }
+                    })
                 });
             }
         } else {
@@ -249,10 +266,10 @@ unsafe extern "system" fn window_info_callback(
                     x: location.x,
                     y: location.y,
                 },
-                dimensions: Dimensions {
+                dimensions: Some(Dimensions {
                     width: dimensions.width,
                     height: dimensions.height,
-                }
+                })
             });
         }
     }
