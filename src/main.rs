@@ -61,6 +61,7 @@ pub struct WindowInfo {
 }
 
 static mut WINDOW_LIST: Option<Vec<WindowInfo>> = None;
+static mut G_DEFER_HDWP: Option<HDWP> = None;
 
 // impl std::default::Default for HWND {
 //     fn default() -> Self { 0 }
@@ -177,6 +178,40 @@ fn change_window_properties(hwnd: HWND, window: &WindowInfo) {
 }
 
 #[cfg(windows)]
+unsafe extern "system" fn apply_profile_callback(
+    hwnd: HWND,
+    _l_param: LPARAM
+) -> i32 {
+    match &WINDOW_LIST {
+        Some(list) => {
+            let title = get_window_title(hwnd);
+            let process = get_window_process(hwnd);
+            for window in list {
+                if title == window.window_title && basename(&process) == window.window_process {
+                    match G_DEFER_HDWP {
+                        Some(hdwp) => {
+                            let old_hdwp = G_DEFER_HDWP.unwrap();
+                            G_DEFER_HDWP = Some(DeferWindowPos(
+                                old_hdwp,
+                                hwnd,
+                                WM_NULL as HWND,
+                                window.location.x,
+                                window.location.y,
+                                window.dimensions.width,
+                                window.dimensions.height,
+                                SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE));
+                        },
+                        None => {}
+                    }
+                }
+            }
+        },
+        None => {}
+    }
+    1
+}
+
+#[cfg(windows)]
 unsafe extern "system" fn window_info_callback(
     hwnd: HWND,
     _l_param: LPARAM
@@ -264,8 +299,6 @@ fn main() {
             let profile = matches.value_of("PROFILE").unwrap();
             let json = std::fs::read_to_string(profile).expect("Failed reading profile");
             println!("{}", json);
-            let windows: Vec<WindowInfo> = serde_json::from_str(&json).unwrap();
-            println!("{:?}", windows);
             // let window = WindowInfo {
             //     hwnd: 0x440716 as HWND,
             //     window_title: String::from(""),
@@ -280,6 +313,23 @@ fn main() {
             //     },
             // };
             // change_window_properties(window.hwnd, &window);
+            unsafe {
+                WINDOW_LIST = Some(serde_json::from_str(&json).unwrap());
+                println!("{:?}", WINDOW_LIST);
+
+                G_DEFER_HDWP = Some(BeginDeferWindowPos(1));
+
+                EnumWindows(Some(apply_profile_callback), 0);
+
+                match G_DEFER_HDWP {
+                    Some(hdwp) => {
+                        if hdwp != NULL {
+                            EndDeferWindowPos(hdwp);
+                        }
+                    },
+                    None => {}
+                }
+            }
         }
         _ => {}
     }

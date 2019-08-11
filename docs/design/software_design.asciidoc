@@ -57,6 +57,12 @@ window-layout-manager ls
 
 == Applying a profile
 
+=== Windows
+
+In order to modify the state of a window on Windows the program needs a handle to a window (i.e. https://docs.microsoft.com/en-us/windows/win32/winprog/windows-data-types[HWND]).
+The windows API provides a https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-enumwindows[EnumWindows] function that iterates over all active windows passing a HWND to a callback function.
+Within this custom callback function the program can find a specific window given specific properties specified within a profile.
+
 .Applying Profile Action Diagram
 [plantuml,align="center"]
 ----
