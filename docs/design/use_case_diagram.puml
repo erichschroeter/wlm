@@ -1,0 +1,10 @@
+@startuml
+left to right direction
+
+:User:
+
+:User: --> (Create a profile)
+:User: --> (Apply a profile)
+:User: --> (List active windows)
+
+@enduml

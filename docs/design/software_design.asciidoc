@@ -1,0 +1,56 @@
+= Software Design
+Erich Schroeter <erich.schroeter@magnetek.com>
+v1.0, 2019-08-11
+:toc:
+:program-name: window-layout-manager
+
+This document provides a centralized location to view design documentation for the *window-layout-manager* program.
+The program is not very complicated, or at least started off that way, but is designed in a manner to provide easy cross-platform expansion.
+
+.Version Support
+|===
+| Version | OS
+
+|v1.0
+|Windows
+|===
+
+== Use Cases
+
+.Use Cases
+[plantuml,align="center"]
+----
+include::use_case_diagram.puml[]
+----
+
+=== Create a profile
+
+Creating a profile can be performed manually by writing your own JSON file with the expected JSON objects.
+Alternatively, you can use *{program-name}* to generate an initial profile file.
+
+WARNING: Using redirection in PowerShell will by default produce a non-UTF-8 file, which is not compatible with the JSON parsing. As a workaround, pipe the output to create an UTF-8 compatible file:
+`window-layout-manager ls --as-profile | Out-File -Encoding ASCII myprofile.json`.
+
+.Command line
+[source,bash]
+----
+window-layout-manager ls --as-profile > myprofile.json
+----
+
+This will create an initial profile that you can modify to your liking.
+
+=== Apply a profile
+
+.Command line
+[source,bash]
+----
+window-layout-manager apply myprofile.json
+----
+
+=== List active windows
+
+.Command line
+[source,bash]
+----
+window-layout-manager ls
+----
