@@ -30,12 +30,6 @@ use winapi::um::handleapi::CloseHandle;
 
 const MAX_WINDOW_TITLE: usize = 128;
 
-// TODO list
-// [x] Create ls command
-// [x]   Implement to print all visible windows
-// [ ] Create apply command
-// [ ]   Implement to load profile file and apply settings
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Location {
     pub x: i32,
