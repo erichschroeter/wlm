@@ -298,7 +298,6 @@ fn main() {
         ("apply", Some(matches)) => {
             let profile = matches.value_of("PROFILE").unwrap();
             let json = std::fs::read_to_string(profile).expect("Failed reading profile");
-            println!("{}", json);
             // let window = WindowInfo {
             //     hwnd: 0x440716 as HWND,
             //     window_title: String::from(""),
@@ -315,7 +314,6 @@ fn main() {
             // change_window_properties(window.hwnd, &window);
             unsafe {
                 WINDOW_LIST = Some(serde_json::from_str(&json).unwrap());
-                println!("{:?}", WINDOW_LIST);
 
                 G_DEFER_HDWP = Some(BeginDeferWindowPos(1));
 
