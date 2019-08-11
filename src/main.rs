@@ -43,18 +43,23 @@ pub struct Dimensions {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct WindowInfo {
+pub struct Properties {
     #[serde(skip_deserializing)]
     #[serde(skip_serializing)]
     // pub hwnd: HWND,
     pub hwnd: u64,
-    pub window_title: String,
-    pub window_process: String,
+    pub title: String,
+    pub process: String,
     pub location: Location,
     pub dimensions: Dimensions,
 }
 
-static mut WINDOW_LIST: Option<Vec<WindowInfo>> = None;
+#[cfg(windows)]
+struct Window {
+    handle: HWND,
+}
+
+static mut WINDOW_LIST: Option<Vec<Properties>> = None;
 static mut G_DEFER_HDWP: Option<HDWP> = None;
 
 // impl std::default::Default for HWND {
@@ -73,9 +78,9 @@ impl fmt::Display for Dimensions {
     }
 }
 
-impl fmt::Display for WindowInfo {
+impl fmt::Display for Properties {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "[{:?}]\n\t\"{}\"\n\t{}\n\t{}\n\t{}", self.hwnd, self.window_title, self.window_process, self.location, self.dimensions)
+        write!(f, "[{:?}]\n\t\"{}\"\n\t{}\n\t{}\n\t{}", self.hwnd, self.title, self.process, self.location, self.dimensions)
     }
 }
 
@@ -136,7 +141,7 @@ fn get_window_dimensions(hwnd: HWND) -> (Location, Dimensions) {
     )
 }
 
-fn add_window(window: WindowInfo) {
+fn add_window(window: Properties) {
     unsafe {
         match &mut WINDOW_LIST {
             Some(list) => {
@@ -151,7 +156,7 @@ fn add_window(window: WindowInfo) {
     }
 }
 
-fn change_window_properties(hwnd: HWND, window: &WindowInfo) {
+fn change_window_properties(hwnd: HWND, window: &Properties) {
     unsafe {
         let mut hdwp = BeginDeferWindowPos(1);
         if hdwp != NULL {
@@ -181,7 +186,7 @@ unsafe extern "system" fn apply_profile_callback(
             let title = get_window_title(hwnd);
             let process = get_window_process(hwnd);
             for window in list {
-                if title == window.window_title && basename(&process) == window.window_process {
+                if title == window.title && basename(&process) == window.process {
                     match G_DEFER_HDWP {
                         Some(hdwp) => {
                             let old_hdwp = G_DEFER_HDWP.unwrap();
@@ -221,10 +226,10 @@ unsafe extern "system" fn window_info_callback(
         let window_process = basename(&window_process);
         if window_process == "explorer.exe" {
             if !window_title.is_empty() {
-                add_window(WindowInfo {
+                add_window(Properties {
                     hwnd: hwnd as u64,
-                    window_title,
-                    window_process,
+                    title: window_title,
+                    process: window_process,
                     location: Location {
                         x: location.x,
                         y: location.y,
@@ -236,10 +241,10 @@ unsafe extern "system" fn window_info_callback(
                 });
             }
         } else {
-            add_window(WindowInfo {
+            add_window(Properties {
                 hwnd: hwnd as u64,
-                window_title,
-                window_process,
+                title: window_title,
+                process: window_process,
                 location: Location {
                     x: location.x,
                     y: location.y,
@@ -292,7 +297,7 @@ fn main() {
         ("apply", Some(matches)) => {
             let profile = matches.value_of("PROFILE").unwrap();
             let json = std::fs::read_to_string(profile).expect("Failed reading profile");
-            // let window = WindowInfo {
+            // let window = Properties {
             //     hwnd: 0x440716 as HWND,
             //     window_title: String::from(""),
             //     window_process: String::from(""),
