@@ -200,7 +200,7 @@ unsafe extern "system" fn apply_profile_callback(
             let window = Window { handle: hwnd };
             let properties = window.properties();
             for profile_window in list {
-                if properties.title == profile_window.title && basename(&properties.process) == profile_window.process {
+                if properties.title == profile_window.title || basename(&properties.process) == profile_window.process {
                     match G_DEFER_HDWP {
                         Some(old_hdwp) => {
                             match &profile_window.dimensions {
