@@ -271,6 +271,8 @@ unsafe extern "system" fn filter_windows_callback(
         let window_title = get_window_title(hwnd);
         let window_process = get_window_process(hwnd);
         let window_process = basename(&window_process);
+        // There are typically a lot of explorer.exe "windows" that get listed that don't have a UI,
+        // so filter them out to avoid clutter.
         if window_process == "explorer.exe" {
             if !window_title.is_empty() {
                 match &mut WINDOW_LIST {
