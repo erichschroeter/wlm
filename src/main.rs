@@ -59,12 +59,28 @@ struct Window {
     handle: HWND,
 }
 
-static mut WINDOW_LIST: Option<Vec<Properties>> = None;
+static mut WINDOW_LIST: Option<Vec<Window>> = None;
+static mut PROFILE: Option<Vec<Properties>> = None;
 static mut G_DEFER_HDWP: Option<HDWP> = None;
 
-// impl std::default::Default for HWND {
-//     fn default() -> Self { 0 }
-// }
+trait HasProperties {
+    fn properties(&self) -> Properties;
+}
+
+impl HasProperties for Window {
+    fn properties(&self) -> Properties {
+        let title = get_window_title(self.handle);
+        let process = get_window_process(self.handle);
+        let (location, dimensions) = get_window_dimensions(self.handle);
+        Properties {
+            hwnd: self.handle as u64,
+            title,
+            process,
+            location: Some(location),
+            dimensions: Some(dimensions),
+        }
+    }
+}
 
 impl fmt::Display for Location {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -162,62 +178,22 @@ fn get_window_dimensions(hwnd: HWND) -> (Location, Dimensions) {
     )
 }
 
-fn add_window(window: Properties) {
-    unsafe {
-        match &mut WINDOW_LIST {
-            Some(list) => {
-                list.push(window);
-            },
-            None => {
-                let mut list = Vec::new();
-                list.push(window);
-                WINDOW_LIST = Some(list);
-            }
-        }
-    }
-}
-
-// fn change_window_properties(hwnd: HWND, window: &Properties) {
-//     match &window.dimensions {
-//         Some(dimensions) => {
-//             unsafe {
-//                 let mut hdwp = BeginDeferWindowPos(1);
-//                 if hdwp != NULL {
-//                     hdwp = DeferWindowPos(
-//                         hdwp,
-//                         hwnd,
-//                         WM_NULL as HWND,
-//                         window.location.x,
-//                         window.location.y,
-//                         dimensions.width,
-//                         dimensions.height,
-//                         SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE);
-//                 }
-//                 if hdwp != NULL {
-//                     EndDeferWindowPos(hdwp);
-//                 }
-//             }
-//         },
-//         None => {}
-//     }
-// }
-
 #[cfg(windows)]
 unsafe extern "system" fn apply_profile_callback(
     hwnd: HWND,
     _l_param: LPARAM
 ) -> i32 {
-    match &WINDOW_LIST {
+    match &PROFILE {
         Some(list) => {
-            let title = get_window_title(hwnd);
-            let process = get_window_process(hwnd);
-            for window in list {
-                if title == window.title && basename(&process) == window.process {
+            let window = Window { handle: hwnd };
+            let properties = window.properties();
+            for profile_window in list {
+                if properties.title == profile_window.title && basename(&properties.process) == profile_window.process {
                     match G_DEFER_HDWP {
                         Some(old_hdwp) => {
-                            match &window.dimensions {
+                            match &profile_window.dimensions {
                                 Some(dimensions) => {
-                                    match &window.location {
+                                    match &profile_window.location {
                                         Some(location) => {
                                             G_DEFER_HDWP = Some(DeferWindowPos(
                                                 old_hdwp,
@@ -243,7 +219,7 @@ unsafe extern "system" fn apply_profile_callback(
                                     }
                                 },
                                 None => {
-                                    match &window.location {
+                                    match &profile_window.location {
                                         Some(location) => {
                                             G_DEFER_HDWP = Some(DeferWindowPos(
                                                 old_hdwp,
@@ -271,7 +247,7 @@ unsafe extern "system" fn apply_profile_callback(
 }
 
 #[cfg(windows)]
-unsafe extern "system" fn window_info_callback(
+unsafe extern "system" fn filter_windows_callback(
     hwnd: HWND,
     _l_param: LPARAM
 ) -> i32 {
@@ -280,40 +256,33 @@ unsafe extern "system" fn window_info_callback(
     let is_visible_on_screen = (window_exstyle & WS_EX_WINDOWEDGE as isize) != 0;
     let is_toolwindow = (window_exstyle & WS_EX_TOOLWINDOW as isize) != 0;
     if is_visible && is_visible_on_screen && !is_toolwindow {
-        let (location, dimensions) = get_window_dimensions(hwnd);
         let window_title = get_window_title(hwnd);
         let window_process = get_window_process(hwnd);
         let window_process = basename(&window_process);
         if window_process == "explorer.exe" {
             if !window_title.is_empty() {
-                add_window(Properties {
-                    hwnd: hwnd as u64,
-                    title: window_title,
-                    process: window_process,
-                    location: Some(Location {
-                        x: location.x,
-                        y: location.y,
-                    }),
-                    dimensions: Some(Dimensions {
-                        width: dimensions.width,
-                        height: dimensions.height,
-                    })
-                });
+                match &mut WINDOW_LIST {
+                    Some(list) => list.push(Window { handle: hwnd }),
+                    None => {
+                        WINDOW_LIST = Some(Vec::new());
+                        match &mut WINDOW_LIST {
+                            Some(list) => list.push(Window { handle: hwnd }),
+                            None => {}
+                        }
+                    }
+                }
             }
         } else {
-            add_window(Properties {
-                hwnd: hwnd as u64,
-                title: window_title,
-                process: window_process,
-                location: Some(Location {
-                    x: location.x,
-                    y: location.y,
-                }),
-                dimensions: Some(Dimensions {
-                    width: dimensions.width,
-                    height: dimensions.height,
-                })
-            });
+            match &mut WINDOW_LIST {
+                Some(list) => list.push(Window { handle: hwnd }),
+                None => {
+                    WINDOW_LIST = Some(Vec::new());
+                    match &mut WINDOW_LIST {
+                        Some(list) => list.push(Window { handle: hwnd }),
+                        None => {}
+                    }
+                }
+            }
         }
     }
     1
@@ -336,17 +305,21 @@ fn main() {
                 .index(1)))
         .get_matches();
     match matches.subcommand() {
-        ("ls", Some(m)) => {
+        ("ls", Some(matches)) => {
             unsafe {
-                EnumWindows(Some(window_info_callback), 0);
+                EnumWindows(Some(filter_windows_callback), 0);
                 // TODO is there a way to access WINDOW_LIST in a safe manner?
                 match &WINDOW_LIST {
                     Some(list) => {
-                        if m.is_present("as-profile") {
-                            print!("{}", serde_json::to_string_pretty(&list).unwrap_or_default());
+                        if matches.is_present("as-profile") {
+                            let mut window_list = Vec::new();
+                            for item in list {
+                                window_list.push(item.properties());
+                            } 
+                            print!("{}", serde_json::to_string_pretty(&window_list).unwrap_or_default());
                         } else {
-                            for w in list {
-                                println!("{}", w);
+                            for window in list {
+                                println!("{}", window.properties());
                             }
                         }
                     },
@@ -357,27 +330,10 @@ fn main() {
         ("apply", Some(matches)) => {
             let profile = matches.value_of("PROFILE").unwrap();
             let json = std::fs::read_to_string(profile).expect("Failed reading profile");
-            // let window = Properties {
-            //     hwnd: 0x440716 as HWND,
-            //     window_title: String::from(""),
-            //     window_process: String::from(""),
-            //     location: Location {
-            //         x: 0,
-            //         y: -1000,
-            //     },
-            //     dimensions: Dimensions {
-            //         width: 200,
-            //         height: 100,
-            //     },
-            // };
-            // change_window_properties(window.hwnd, &window);
             unsafe {
-                WINDOW_LIST = Some(serde_json::from_str(&json).unwrap());
-
+                PROFILE = Some(serde_json::from_str(&json).unwrap());
                 G_DEFER_HDWP = Some(BeginDeferWindowPos(1));
-
                 EnumWindows(Some(apply_profile_callback), 0);
-
                 match G_DEFER_HDWP {
                     Some(hdwp) => {
                         if hdwp != NULL {
