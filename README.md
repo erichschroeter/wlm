@@ -16,7 +16,7 @@ This will output [JSON](http://json.org/) text that can be saved to a file and m
 Redirecting the output in [PowerShell](https://docs.microsoft.com/en-us/powershell/) requires special attention due to the default encoding used by PowerShell.
 The JSON profile file needs to be UTF-8 compatible.
 
-_**NOTE:** If the window title has non-ASCII characters this method will likely not work._
+_**NOTE:** If the window title has non-ASCII characters this method may not work if filtering by the window title._
 
     window-layout-manager ls --as-profile | Out-File -Encoding ASCII myprofile.json
 
