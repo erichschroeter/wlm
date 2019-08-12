@@ -48,7 +48,7 @@ pub struct Properties {
     #[serde(skip_serializing)]
     // pub hwnd: HWND,
     pub hwnd: u64,
-    pub title: String,
+    pub title: Option<String>,
     pub process: String,
     pub location: Option<Location>,
     pub dimensions: Option<Dimensions>,
@@ -74,7 +74,7 @@ impl HasProperties for Window {
         let (location, dimensions) = get_window_dimensions(self.handle);
         Properties {
             hwnd: self.handle as u64,
-            title,
+            title: Some(title),
             process,
             location: Some(location),
             dimensions: Some(dimensions),
@@ -100,20 +100,32 @@ impl fmt::Display for Properties {
             Some(dimensions) => {
                 match &self.location {
                     Some(location) => {
-                        write!(f, "[{:?}]\n\t\"{}\"\n\t{}\n\t{}\n\t{}", self.hwnd, self.title, self.process, location, dimensions)
+                        match &self.title {
+                            Some(title) => write!(f, "[{:?}]\n\t\"{}\"\n\t{}\n\t{}\n\t{}", self.hwnd, title, self.process, location, dimensions),
+                            None => write!(f, "[{:?}]\n\t{}\n\t{}\n\t{}", self.hwnd, self.process, location, dimensions)
+                        }
                     },
                     None => {
-                        write!(f, "[{:?}]\n\t\"{}\"\n\t{}\n\t{}", self.hwnd, self.title, self.process, dimensions)
+                        match &self.title {
+                            Some(title) => write!(f, "[{:?}]\n\t\"{}\"\n\t{}\n\t{}", self.hwnd, title, self.process, dimensions),
+                            None => write!(f, "[{:?}]\n\t{}\n\t{}", self.hwnd, self.process, dimensions)
+                        }
                     }
                 }
             },
             None => {
                 match &self.location {
                     Some(location) => {
-                        write!(f, "[{:?}]\n\t\"{}\"\n\t{}\n\t{}", self.hwnd, self.title, self.process, location)
+                        match &self.title {
+                            Some(title) => write!(f, "[{:?}]\n\t\"{}\"\n\t{}\n\t{}", self.hwnd, title, self.process, location),
+                            None => write!(f, "[{:?}]\n\t{}\n\t{}", self.hwnd, self.process, location)
+                        }
                     },
                     None => {
-                        write!(f, "[{:?}]\n\t\"{}\"\n\t{}", self.hwnd, self.title, self.process)
+                        match &self.title {
+                            Some(title) => write!(f, "[{:?}]\n\t\"{}\"\n\t{}", self.hwnd, title, self.process),
+                            None => write!(f, "[{:?}]\n\t{}", self.hwnd, self.process)
+                        }
                     }
                 }
             }
