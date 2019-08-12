@@ -21,7 +21,7 @@ use winapi::um::winuser::GetWindowLongPtrW;
 use winapi::um::winuser::GWL_EXSTYLE;
 use winapi::um::winuser::{WS_EX_WINDOWEDGE, WS_EX_TOOLWINDOW};
 use winapi::um::winuser::{WM_NULL, HDWP, BeginDeferWindowPos, DeferWindowPos, EndDeferWindowPos};
-use winapi::um::winuser::{SWP_NOZORDER, SWP_NOOWNERZORDER, SWP_NOACTIVATE};
+use winapi::um::winuser::{SWP_NOZORDER, SWP_NOOWNERZORDER, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOMOVE};
 use winapi::um::winnt::HANDLE;
 use winapi::um::winnt::{PROCESS_QUERY_INFORMATION, PROCESS_VM_READ};
 use winapi::um::processthreadsapi::OpenProcess;
@@ -230,32 +230,30 @@ unsafe extern "system" fn apply_profile_callback(
                                                 SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE));
                                         },
                                         None => {
-                                            // TODO use SWP_NOMOVE to ignore x and y parameters
-                                            // G_DEFER_HDWP = Some(DeferWindowPos(
-                                            //     old_hdwp,
-                                            //     hwnd,
-                                            //     WM_NULL as HWND,
-                                            //     window.location.x,
-                                            //     window.location.y,
-                                            //     dimensions.width,
-                                            //     dimensions.height,
-                                            //     SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE));
+                                            G_DEFER_HDWP = Some(DeferWindowPos(
+                                                old_hdwp,
+                                                hwnd,
+                                                WM_NULL as HWND,
+                                                0,
+                                                0,
+                                                dimensions.width,
+                                                dimensions.height,
+                                                SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_NOMOVE));
                                         }
                                     }
                                 },
                                 None => {
                                     match &window.location {
                                         Some(location) => {
-                                            // TODO use SWP_NOSIZE to ignore cx and cy parameters
-                                            // G_DEFER_HDWP = Some(DeferWindowPos(
-                                            //     old_hdwp,
-                                            //     hwnd,
-                                            //     WM_NULL as HWND,
-                                            //     location.x,
-                                            //     location.y,
-                                            //     dimensions.width,
-                                            //     dimensions.height,
-                                            //     SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE));
+                                            G_DEFER_HDWP = Some(DeferWindowPos(
+                                                old_hdwp,
+                                                hwnd,
+                                                WM_NULL as HWND,
+                                                location.x,
+                                                location.y,
+                                                0,
+                                                0,
+                                                SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_NOSIZE));
                                         },
                                         None => {}
                                     }
