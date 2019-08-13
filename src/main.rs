@@ -96,40 +96,22 @@ impl fmt::Display for Dimensions {
 
 impl fmt::Display for Properties {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self.dimensions {
-            Some(dimensions) => {
-                match &self.location {
-                    Some(location) => {
-                        match &self.title {
-                            Some(title) => write!(f, "[{:?}]\n\t\"{}\"\n\t{}\n\t{}\n\t{}", self.hwnd, title, self.process, location, dimensions),
-                            None => write!(f, "[{:?}]\n\t{}\n\t{}\n\t{}", self.hwnd, self.process, location, dimensions)
-                        }
-                    },
-                    None => {
-                        match &self.title {
-                            Some(title) => write!(f, "[{:?}]\n\t\"{}\"\n\t{}\n\t{}", self.hwnd, title, self.process, dimensions),
-                            None => write!(f, "[{:?}]\n\t{}\n\t{}", self.hwnd, self.process, dimensions)
-                        }
-                    }
-                }
-            },
-            None => {
-                match &self.location {
-                    Some(location) => {
-                        match &self.title {
-                            Some(title) => write!(f, "[{:?}]\n\t\"{}\"\n\t{}\n\t{}", self.hwnd, title, self.process, location),
-                            None => write!(f, "[{:?}]\n\t{}\n\t{}", self.hwnd, self.process, location)
-                        }
-                    },
-                    None => {
-                        match &self.title {
-                            Some(title) => write!(f, "[{:?}]\n\t\"{}\"\n\t{}", self.hwnd, title, self.process),
-                            None => write!(f, "[{:?}]\n\t{}", self.hwnd, self.process)
-                        }
-                    }
-                }
-            }
+        let mut output = String::new();
+        output.push_str(&format!("[{}]", self.hwnd));
+        match &self.title {
+            Some(title) => output.push_str(&format!("\n\t\"{}\"", title)),
+            None => {}
         }
+        output.push_str(&format!("\n\t{}", self.process));
+        match &self.location {
+            Some(location) => output.push_str(&format!("\n\t{}", location)),
+            None => {}
+        }
+        match &self.dimensions {
+            Some(dimensions) => output.push_str(&format!("\n\t{}", dimensions)),
+            None => {}
+        }
+        write!(f, "{}", output)
     }
 }
 
