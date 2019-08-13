@@ -4,6 +4,8 @@ use serde::{Serialize, Deserialize};
 use std::fmt;
 use std::path::Path;
 #[cfg(windows)] extern crate winapi;
+extern crate regex;
+use regex::Regex;
 use winapi::shared::minwindef::LPARAM;
 use winapi::shared::minwindef::DWORD;
 use winapi::shared::minwindef::MAX_PATH;
@@ -210,16 +212,40 @@ unsafe extern "system" fn apply_profile_callback(
     _l_param: LPARAM
 ) -> i32 {
     match &PROFILE {
-        Some(list) => {
+        Some(profile) => {
             let window = Window { handle: hwnd };
             let properties = window.properties();
-            for profile_window in list {
-                if properties.title == profile_window.title || basename(&properties.process) == profile_window.process {
-                    match G_DEFER_HDWP {
-                        Some(mut hdwp) => apply_profile_properties(&mut hdwp, hwnd, profile_window),
-                        None => eprintln!("BeginDeferWindowPos was not called before DeferWindowPos"),
-                    }
+            for profile_window in profile {
+                match &profile_window.title {
+                    Some(profile_title) => {
+                        let re = Regex::new(profile_title);
+                        match re {
+                            Ok(re) => {
+                                match &properties.title {
+                                    Some(hwnd_title) => {
+                                        if re.is_match(hwnd_title) {
+                                            match G_DEFER_HDWP {
+                                                Some(mut hdwp) => apply_profile_properties(&mut hdwp, hwnd, profile_window),
+                                                None => eprintln!("BeginDeferWindowPos was not called before DeferWindowPos"),
+                                            }
+                                        } else {
+                                            eprintln!("'{}' did not match", hwnd_title)
+                                        }
+                                    },
+                                    None => {}
+                                }
+                            },
+                            Err(e) => { eprintln!("Invalid regex: {}", e) }
+                        }
+                    },
+                    None => {}
                 }
+                // if properties.title == profile_window.title || basename(&properties.process) == profile_window.process {
+                //     match G_DEFER_HDWP {
+                //         Some(mut hdwp) => apply_profile_properties(&mut hdwp, hwnd, profile_window),
+                //         None => eprintln!("BeginDeferWindowPos was not called before DeferWindowPos"),
+                //     }
+                // }
             }
         },
         None => {}
