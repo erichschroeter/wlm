@@ -51,7 +51,7 @@ pub struct Properties {
     // pub hwnd: HWND,
     pub hwnd: u64,
     pub title: Option<String>,
-    pub process: String,
+    pub process: Option<String>,
     pub location: Option<Location>,
     pub dimensions: Option<Dimensions>,
 }
@@ -77,7 +77,7 @@ impl HasProperties for Window {
         Properties {
             hwnd: self.handle as u64,
             title: Some(title),
-            process,
+            process: Some(process),
             location: Some(location),
             dimensions: Some(dimensions),
         }
@@ -104,7 +104,10 @@ impl fmt::Display for Properties {
             Some(title) => output.push_str(&format!("\n\t\"{}\"", title)),
             None => {}
         }
-        output.push_str(&format!("\n\t{}", self.process));
+        match &self.process {
+            Some(process) => output.push_str(&format!("\n\t{}", process)),
+            None => {}
+        }
         match &self.location {
             Some(location) => output.push_str(&format!("\n\t{}", location)),
             None => {}
@@ -229,7 +232,7 @@ unsafe extern "system" fn apply_profile_callback(
                                                 None => eprintln!("BeginDeferWindowPos was not called before DeferWindowPos"),
                                             }
                                         } else {
-                                            eprintln!("'{}' did not match", hwnd_title)
+                                            // eprintln!("'{}' did not match", hwnd_title)
                                         }
                                     },
                                     None => {}
@@ -238,14 +241,33 @@ unsafe extern "system" fn apply_profile_callback(
                             Err(e) => { eprintln!("Invalid regex: {}", e) }
                         }
                     },
-                    None => {}
+                    None => {
+                        match &profile_window.process {
+                            Some(profile_process) => {
+                                let re = Regex::new(profile_process);
+                                match re {
+                                    Ok(re) => {
+                                        match &properties.process {
+                                            Some(hwnd_process) => {
+                                                if re.is_match(hwnd_process) {
+                                                    match G_DEFER_HDWP {
+                                                        Some(mut hdwp) => apply_profile_properties(&mut hdwp, hwnd, profile_window),
+                                                        None => eprintln!("BeginDeferWindowPos was not called before DeferWindowPos"),
+                                                    }
+                                                } else {
+                                                    // eprintln!("'{}' did not match", hwnd_process)
+                                                }
+                                            },
+                                            None => {}
+                                        }
+                                    },
+                                    Err(e) => { eprintln!("Invalid regex: {}", e) }
+                                }
+                            },
+                            None => {}
+                        }
+                    }
                 }
-                // if properties.title == profile_window.title || basename(&properties.process) == profile_window.process {
-                //     match G_DEFER_HDWP {
-                //         Some(mut hdwp) => apply_profile_properties(&mut hdwp, hwnd, profile_window),
-                //         None => eprintln!("BeginDeferWindowPos was not called before DeferWindowPos"),
-                //     }
-                // }
             }
         },
         None => {}
