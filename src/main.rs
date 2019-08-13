@@ -173,6 +173,38 @@ fn get_window_dimensions(hwnd: HWND) -> (Location, Dimensions) {
 }
 
 #[cfg(windows)]
+fn apply_profile_properties(hdwp: &mut HDWP, hwnd: HWND, properties: &Properties) {
+    let mut location = Location { x: 0, y: 0 };
+    let mut dimensions = Dimensions { width: 0, height: 0 };
+    let mut flags = SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE;
+    match &properties.location {
+        Some(new_location) => {
+            location.x = new_location.x;
+            location.y = new_location.y;
+        },
+        None => flags |= SWP_NOMOVE,
+    }
+    match &properties.dimensions {
+        Some(new_dimensions) => {
+            dimensions.width = new_dimensions.width;
+            dimensions.height = new_dimensions.height;
+        },
+        None => flags |= SWP_NOSIZE,
+    }
+    unsafe {
+        *hdwp = DeferWindowPos(
+            *hdwp,
+            hwnd,
+            WM_NULL as HWND,
+            location.x,
+            location.y,
+            dimensions.width,
+            dimensions.height,
+            flags);
+    }
+}
+
+#[cfg(windows)]
 unsafe extern "system" fn apply_profile_callback(
     hwnd: HWND,
     _l_param: LPARAM
@@ -184,53 +216,8 @@ unsafe extern "system" fn apply_profile_callback(
             for profile_window in list {
                 if properties.title == profile_window.title || basename(&properties.process) == profile_window.process {
                     match G_DEFER_HDWP {
-                        Some(old_hdwp) => {
-                            match &profile_window.dimensions {
-                                Some(dimensions) => {
-                                    match &profile_window.location {
-                                        Some(location) => {
-                                            G_DEFER_HDWP = Some(DeferWindowPos(
-                                                old_hdwp,
-                                                hwnd,
-                                                WM_NULL as HWND,
-                                                location.x,
-                                                location.y,
-                                                dimensions.width,
-                                                dimensions.height,
-                                                SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE));
-                                        },
-                                        None => {
-                                            G_DEFER_HDWP = Some(DeferWindowPos(
-                                                old_hdwp,
-                                                hwnd,
-                                                WM_NULL as HWND,
-                                                0,
-                                                0,
-                                                dimensions.width,
-                                                dimensions.height,
-                                                SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_NOMOVE));
-                                        }
-                                    }
-                                },
-                                None => {
-                                    match &profile_window.location {
-                                        Some(location) => {
-                                            G_DEFER_HDWP = Some(DeferWindowPos(
-                                                old_hdwp,
-                                                hwnd,
-                                                WM_NULL as HWND,
-                                                location.x,
-                                                location.y,
-                                                0,
-                                                0,
-                                                SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_NOSIZE));
-                                        },
-                                        None => {}
-                                    }
-                                }
-                            }
-                        },
-                        None => {}
+                        Some(mut hdwp) => apply_profile_properties(&mut hdwp, hwnd, profile_window),
+                        None => eprintln!("BeginDeferWindowPos was not called before DeferWindowPos"),
                     }
                 }
             }
