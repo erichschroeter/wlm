@@ -97,7 +97,7 @@ impl fmt::Display for Dimensions {
 impl fmt::Display for Properties {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut output = String::new();
-        output.push_str(&format!("[{}]", self.hwnd));
+        output.push_str(&format!("[{:?}]", self.hwnd as HWND));
         match &self.title {
             Some(title) => output.push_str(&format!("\n\t\"{}\"", title)),
             None => {}
