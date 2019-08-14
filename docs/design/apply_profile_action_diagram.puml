@@ -1,17 +1,30 @@
 @startuml "Applying a profile"
 
 note left
-    Profile is loaded
+    EnumWindows callback called.
 end note
 
-(*) --> "Next WindowInfo"
-if "Next WindowInfo exists?"
-    -->[true] "Find HWND based on profile properties"
-    if "HWND exists?" then
-        -->[true] "Apply profile properties"
-        --> (*)
+(*) --> if "Profile is loaded?" then
+    if "Profile specifies title?" then
+        -->[true] "Get HWND title"
+        if "Profile title == HWND title" then
+            -->[true] "Apply profile properties"
+            --> (*)
+        else
+            -->[false] (*)
+        endif
     else
-        -->[false] "Next WindowInfo"
+        if "Profile specifies process?" then
+            -->[true] "Get HWND process"
+            if "Profile process == HWND process" then
+                -->[true] "Apply profile properties"
+                --> (*)
+            else
+                -->[false] (*)
+            endif
+        else
+            -->[false] (*)
+        endif
     endif
 else
     -->[false] (*)
