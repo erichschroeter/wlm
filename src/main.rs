@@ -29,6 +29,9 @@ use winapi::um::winnt::{PROCESS_QUERY_INFORMATION, PROCESS_VM_READ};
 use winapi::um::processthreadsapi::OpenProcess;
 use winapi::um::psapi::GetModuleFileNameExW;
 use winapi::um::handleapi::CloseHandle;
+use winapi::um::winbase::FormatMessageW;
+use winapi::um::winbase::{FORMAT_MESSAGE_ARGUMENT_ARRAY, FORMAT_MESSAGE_FROM_SYSTEM, FORMAT_MESSAGE_IGNORE_INSERTS};
+use winapi::um::errhandlingapi::GetLastError;
 
 const MAX_WINDOW_TITLE: usize = 128;
 
@@ -130,6 +133,36 @@ fn get_window_title(hwnd: HWND) -> String {
         window_title.truncate(first);
     }
     String::from_utf16(&window_title).unwrap()
+}
+
+#[cfg(windows)]
+fn get_last_error_message() -> String {
+    let mut error_code = 0;
+
+    unsafe {
+        error_code = GetLastError();
+    }
+
+    if error_code == 0 {
+        String::from("")
+    } else {
+        let mut v = [0u16; 255];
+        unsafe {
+            let msg_size = FormatMessageW(
+                FORMAT_MESSAGE_ARGUMENT_ARRAY | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+                std::ptr::null(),
+                error_code,
+                0,
+                v.as_mut_ptr(),
+                255,
+                std::ptr::null_mut());
+            if msg_size == 0 {
+                String::from("")
+            } else {
+                String::from_utf16(&v).unwrap()
+            }
+        }
+    }
 }
 
 fn get_window_process(hwnd: HWND) -> String {
