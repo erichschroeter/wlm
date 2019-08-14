@@ -324,10 +324,16 @@ fn main() {
         .version("1.0")
         .about("Applies window properties based on profile settings.")
         .subcommand(SubCommand::with_name("ls")
-            .about("lists active windows and their properies")
-            .arg(Arg::with_name("as-profile")
-                .help("Export list of active windows as a profile")
-                .long("as-profile")))
+            .about("Lists active windows and their properies.
+
+    [HWND - Window Handle]
+        Title
+        Process
+        (x, y) top-left of window
+        (width, height)")
+            .arg(Arg::with_name("as-json")
+                .help("Change output format of active windows in JSON")
+                .long("as-json")))
         .subcommand(SubCommand::with_name("apply")
             .about("apply a profile to active windows")
             .arg(Arg::with_name("PROFILE")
@@ -342,7 +348,7 @@ fn main() {
                 // TODO is there a way to access WINDOW_LIST in a safe manner?
                 match &WINDOW_LIST {
                     Some(list) => {
-                        if matches.is_present("as-profile") {
+                        if matches.is_present("as-json") {
                             let mut window_list = Vec::new();
                             for item in list {
                                 window_list.push(item.properties());

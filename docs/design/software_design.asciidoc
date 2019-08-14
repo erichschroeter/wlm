@@ -29,12 +29,12 @@ Creating a profile can be performed manually by writing your own JSON file with 
 Alternatively, you can use *{program-name}* to generate an initial profile file.
 
 WARNING: Using redirection in PowerShell will by default produce a non-UTF-8 file, which is not compatible with the JSON parsing. As a workaround, pipe the output to create an UTF-8 compatible file:
-`window-layout-manager ls --as-profile | Out-File -Encoding ASCII myprofile.json`.
+`window-layout-manager ls --as-json | Out-File -Encoding ASCII myprofile.json`.
 
 .Command line
 [source,bash]
 ----
-window-layout-manager ls --as-profile > myprofile.json
+window-layout-manager ls --as-json > myprofile.json
 ----
 
 This will create an initial profile that you can modify to your liking.

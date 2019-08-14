@@ -4,12 +4,12 @@ _window-layout-manager_ is a utility program that can automatically move and res
 
 A profile is a list of windows and their respective properties.
 
-Creating a profile file can be done by executing the `ls` command with the `--as-profile` flag.
+Creating a profile file can be done by executing the `ls` command with the `--as-json` flag.
 This will output [JSON](http://json.org/) text that can be saved to a file and modified.
 
 ## Bash / CommandPrompt
 
-    window-layout-manager ls --as-profile > myprofile.json
+    window-layout-manager ls --as-json > myprofile.json
 
 ## PowerShell
 
@@ -18,7 +18,7 @@ The JSON profile file needs to be UTF-8 compatible.
 
 _**NOTE:** If the window title has non-ASCII characters this method may not work if filtering by the window title._
 
-    window-layout-manager ls --as-profile | Out-File -Encoding ASCII myprofile.json
+    window-layout-manager ls --as-json | Out-File -Encoding ASCII myprofile.json
 
 # Applying a profile
 
