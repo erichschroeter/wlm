@@ -25,7 +25,7 @@ use winapi::um::winuser::{WS_EX_WINDOWEDGE, WS_EX_TOOLWINDOW};
 use winapi::um::winuser::{WM_NULL, HDWP, BeginDeferWindowPos, DeferWindowPos, EndDeferWindowPos};
 use winapi::um::winuser::{SWP_NOZORDER, SWP_NOOWNERZORDER, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOMOVE};
 use winapi::um::winnt::HANDLE;
-use winapi::um::winnt::{PROCESS_QUERY_INFORMATION, PROCESS_VM_READ};
+use winapi::um::winnt::{PROCESS_QUERY_INFORMATION, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_VM_READ};
 use winapi::um::processthreadsapi::OpenProcess;
 use winapi::um::psapi::GetModuleFileNameExW;
 use winapi::um::handleapi::CloseHandle;
@@ -170,8 +170,17 @@ fn get_window_process(hwnd: HWND) -> String {
     let mut window_process: [WCHAR; MAX_PATH] = [0; MAX_PATH];
     unsafe {
         GetWindowThreadProcessId(hwnd, &mut proc_id);
-        let process_handle: HANDLE = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, proc_id);
-        GetModuleFileNameExW(process_handle, NULL as HINSTANCE, window_process.as_mut_ptr(), MAX_PATH as u32);
+        let process_handle: HANDLE = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ, 0, proc_id);
+        let mut buf_size: DWORD = MAX_PATH as u32;
+        let return_value = GetModuleFileNameExW(process_handle, NULL as HINSTANCE, window_process.as_mut_ptr(), MAX_PATH as u32);
+        // let return_value = QueryFullProcessImageNameW(process_handle, 0, window_process.as_mut_ptr(), &mut buf_size);
+        if return_value == 0 {
+            // let mut error_message: [WCHAR; 256] = ['\0' as u16; 256];
+            // let e = GetLastError();
+            // eprintln!("QueryFullProcessImageNameW Failed: {}", e);
+            let msg = get_last_error_message();
+            eprintln!("QueryFullProcessImageNameW Failed: {}", msg);
+        }
         CloseHandle(process_handle);
     }
     let mut window_process = window_process.to_vec();
@@ -308,6 +317,60 @@ unsafe extern "system" fn apply_profile_callback(
     1
 }
 
+use winapi::um::winnt::SE_PRIVILEGE_ENABLED;
+use winapi::um::winnt::SE_PROF_SINGLE_PROCESS_NAME;
+use winapi::um::winnt::TOKEN_PRIVILEGES;
+use winapi::um::winnt::LUID_AND_ATTRIBUTES;
+use winapi::um::winnt::LPCWSTR;
+use winapi::um::winnt::TOKEN_ALL_ACCESS;
+use winapi::um::winnt::PTOKEN_PRIVILEGES;
+use winapi::um::winnt::PHANDLE;
+use winapi::shared::ntdef::LUID;
+use winapi::shared::minwindef::PDWORD;
+use winapi::um::winbase::LookupPrivilegeValueW;
+use winapi::um::processthreadsapi::GetCurrentProcess;
+use winapi::um::processthreadsapi::OpenProcessToken;
+use winapi::um::securitybaseapi::AdjustTokenPrivileges;
+use winapi::um::errhandlingapi::GetLastError;
+
+#[cfg(windows)]
+fn enable_windows_privilege(privilege: &str) -> bool {
+    let mut luid = LUID {
+        LowPart: 0,
+        HighPart: 0,
+    };
+    let mut tp = TOKEN_PRIVILEGES {
+        PrivilegeCount: 1,
+        Privileges: [
+            LUID_AND_ATTRIBUTES {
+                Luid: luid,
+                Attributes: SE_PRIVILEGE_ENABLED,
+            }
+        ]
+    };
+    unsafe {
+        let mut current_process = GetCurrentProcess();
+        let mut current_token: HANDLE = NULL;
+        let result = LookupPrivilegeValueW(NULL as LPCWSTR, privilege.as_ptr() as LPCWSTR, &mut luid);
+        if result == 0 {
+            let e = GetLastError();
+            eprintln!("LookupPrivilegeValueW failed: {}", e);
+            return false;
+        }
+        let result = OpenProcessToken(current_process, TOKEN_ALL_ACCESS, current_token as PHANDLE);
+        if result == 0 {
+            eprintln!("OpenProcessToken failed");
+            return false;
+        }
+        let result = AdjustTokenPrivileges(current_token, 0, &mut tp, std::mem::size_of::<TOKEN_PRIVILEGES>() as u32, NULL as PTOKEN_PRIVILEGES, NULL as PDWORD);
+        if result == 0 {
+            eprintln!("AdjustTokenPrivileges failed");
+            return false;
+        }
+        true
+    }
+}
+
 #[cfg(windows)]
 unsafe extern "system" fn filter_windows_callback(
     hwnd: HWND,
@@ -317,6 +380,7 @@ unsafe extern "system" fn filter_windows_callback(
     let window_exstyle = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
     let is_visible_on_screen = (window_exstyle & WS_EX_WINDOWEDGE as isize) != 0;
     let is_toolwindow = (window_exstyle & WS_EX_TOOLWINDOW as isize) != 0;
+    // enable_windows_privilege(SE_PROF_SINGLE_PROCESS_NAME);
     if is_visible && is_visible_on_screen && !is_toolwindow {
         let window_title = get_window_title(hwnd);
         let window_process = get_window_process(hwnd);

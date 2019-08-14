@@ -11,4 +11,4 @@ serde_json = "1.0"
 regex = "1"
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3", features = ["winuser", "processthreadsapi", "psapi", "handleapi"] }
+winapi = { version = "0.3", features = ["winuser", "processthreadsapi", "psapi", "handleapi", "securitybaseapi"] }
