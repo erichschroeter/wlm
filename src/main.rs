@@ -251,6 +251,7 @@ unsafe extern "system" fn apply_profile_callback(
         Some(profile) => {
             let window = Window { handle: hwnd };
             let properties = window.properties();
+            let mut match_found = false;
             for profile_window in profile {
                 match &profile_window.title {
                     Some(profile_title) => {
@@ -261,7 +262,10 @@ unsafe extern "system" fn apply_profile_callback(
                                     Some(hwnd_title) => {
                                         if re.is_match(hwnd_title) {
                                             match G_DEFER_HDWP {
-                                                Some(mut hdwp) => apply_profile_properties(&mut hdwp, hwnd, profile_window),
+                                                Some(mut hdwp) => {
+                                                    apply_profile_properties(&mut hdwp, hwnd, profile_window);
+                                                    match_found = true;
+                                                },
                                                 None => eprintln!("BeginDeferWindowPos was not called before DeferWindowPos"),
                                             }
                                         } else {
@@ -284,7 +288,10 @@ unsafe extern "system" fn apply_profile_callback(
                                             Some(hwnd_process) => {
                                                 if re.is_match(hwnd_process) {
                                                     match G_DEFER_HDWP {
-                                                        Some(mut hdwp) => apply_profile_properties(&mut hdwp, hwnd, profile_window),
+                                                        Some(mut hdwp) => {
+                                                            apply_profile_properties(&mut hdwp, hwnd, profile_window);
+                                                            match_found = true;
+                                                        },
                                                         None => eprintln!("BeginDeferWindowPos was not called before DeferWindowPos"),
                                                     }
                                                 } else {
@@ -300,6 +307,9 @@ unsafe extern "system" fn apply_profile_callback(
                             None => {}
                         }
                     }
+                }
+                if match_found {
+                    break;
                 }
             }
         },
