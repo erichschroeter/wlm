@@ -8,7 +8,7 @@ end note
     if "Profile specifies title?" then
         -->[true] "Get HWND title"
         if "Profile title == HWND title" then
-            -->[true] "Apply profile properties"
+            -->[true] "Assign HWND to profile window"
             --> (*)
         else
             -->[false] (*)
@@ -17,7 +17,7 @@ end note
         if "Profile specifies process?" then
             -->[true] "Get HWND process"
             if "Profile process == HWND process" then
-                -->[true] "Apply profile properties"
+                -->[true] "Assign HWND to profile window"
                 --> (*)
             else
                 -->[false] (*)
