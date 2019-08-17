@@ -281,54 +281,24 @@ unsafe extern "system" fn apply_profile_callback(
     hwnd: HWND,
     _l_param: LPARAM
 ) -> i32 {
-    match &PROFILE {
+    match &mut PROFILE {
         Some(profile) => {
-            let properties = hwnd.properties();
-            let mut match_found = false;
-            for profile_window in &profile.windows {
-                match &profile_window.title {
-                    Some(profile_title) => {
-                        let re = Regex::new(profile_title);
-                        match re {
-                            Ok(re) => {
-                                match &properties.title {
-                                    Some(hwnd_title) => {
-                                        if re.is_match(hwnd_title) {
-                                            match G_DEFER_HDWP {
-                                                Some(mut hdwp) => {
-                                                    apply_profile_properties(&mut hdwp, hwnd, profile_window);
-                                                    match_found = true;
-                                                },
-                                                None => eprintln!("BeginDeferWindowPos was not called before DeferWindowPos"),
-                                            }
-                                        } else {
-                                            // eprintln!("'{}' did not match", hwnd_title)
-                                        }
-                                    },
-                                    None => {}
-                                }
-                            },
-                            Err(e) => { eprintln!("Invalid regex: {}", e) }
-                        }
-                    },
-                    None => {
-                        match &profile_window.process {
-                            Some(profile_process) => {
-                                let re = Regex::new(profile_process);
+            match check_valid_window(hwnd) {
+                Some(hwnd_window) => {
+                    let mut match_found = false;
+                    for profile_window in &mut profile.windows {
+                        match &profile_window.title {
+                            Some(profile_title) => {
+                                let re = Regex::new(profile_title);
                                 match re {
                                     Ok(re) => {
-                                        match &properties.process {
-                                            Some(hwnd_process) => {
-                                                if re.is_match(hwnd_process) {
-                                                    match G_DEFER_HDWP {
-                                                        Some(mut hdwp) => {
-                                                            apply_profile_properties(&mut hdwp, hwnd, profile_window);
-                                                            match_found = true;
-                                                        },
-                                                        None => eprintln!("BeginDeferWindowPos was not called before DeferWindowPos"),
-                                                    }
+                                        match &hwnd_window.title {
+                                            Some(hwnd_title) => {
+                                                if re.is_match(hwnd_title) {
+                                                    profile_window.hwnd = hwnd as u64;
+                                                    match_found = true;
                                                 } else {
-                                                    // eprintln!("'{}' did not match", hwnd_process)
+                                                    // eprintln!("'{}' did not match", hwnd_title)
                                                 }
                                             },
                                             None => {}
@@ -337,13 +307,37 @@ unsafe extern "system" fn apply_profile_callback(
                                     Err(e) => { eprintln!("Invalid regex: {}", e) }
                                 }
                             },
-                            None => {}
+                            None => {
+                                match &profile_window.process {
+                                    Some(profile_process) => {
+                                        let re = Regex::new(profile_process);
+                                        match re {
+                                            Ok(re) => {
+                                                match &hwnd_window.process {
+                                                    Some(hwnd_process) => {
+                                                        if re.is_match(hwnd_process) {
+                                                            profile_window.hwnd = hwnd as u64;
+                                                            match_found = true;
+                                                        } else {
+                                                            // eprintln!("'{}' did not match", hwnd_process)
+                                                        }
+                                                    },
+                                                    None => {}
+                                                }
+                                            },
+                                            Err(e) => { eprintln!("Invalid regex: {}", e) }
+                                        }
+                                    },
+                                    None => {}
+                                }
+                            }
+                        }
+                        if match_found {
+                            break;
                         }
                     }
-                }
-                if match_found {
-                    break;
-                }
+                },
+                None => {}
             }
         },
         None => {}
@@ -428,8 +422,23 @@ fn main() {
             let json = std::fs::read_to_string(profile).expect("Failed reading profile");
             unsafe {
                 PROFILE = Some(serde_json::from_str(&json).unwrap());
-                G_DEFER_HDWP = Some(BeginDeferWindowPos(1));
                 EnumWindows(Some(apply_profile_callback), 0);
+                G_DEFER_HDWP = Some(BeginDeferWindowPos(1));
+                match &PROFILE {
+                    Some(profile) => {
+                        for window in &profile.windows {
+                            if window.hwnd != 0 {
+                                match G_DEFER_HDWP {
+                                    Some(mut hdwp) => {
+                                        apply_profile_properties(&mut hdwp, window.hwnd as HWND, window);
+                                    },
+                                    None => eprintln!("BeginDeferWindowPos was not called before DeferWindowPos"),
+                                }
+                            }
+                        }
+                    },
+                    None => {}
+                }
                 match G_DEFER_HDWP {
                     Some(hdwp) => {
                         if hdwp != NULL {
