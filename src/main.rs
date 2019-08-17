@@ -59,11 +59,6 @@ pub struct Properties {
     pub dimensions: Option<Dimensions>,
 }
 
-#[cfg(windows)]
-struct Window {
-    handle: HWND,
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 struct Profile {
     windows: Vec<Properties>,
@@ -91,21 +86,6 @@ impl HasProperties for HWND {
         let (location, dimensions) = get_window_dimensions(*self);
         Properties {
             hwnd: *self as u64,
-            title: Some(title),
-            process: Some(process),
-            location: Some(location),
-            dimensions: Some(dimensions),
-        }
-    }
-}
-
-impl HasProperties for Window {
-    fn properties(&self) -> Properties {
-        let title = get_window_title(self.handle);
-        let process = get_window_process(self.handle);
-        let (location, dimensions) = get_window_dimensions(self.handle);
-        Properties {
-            hwnd: self.handle as u64,
             title: Some(title),
             process: Some(process),
             location: Some(location),
@@ -276,8 +256,7 @@ unsafe extern "system" fn apply_profile_callback(
 ) -> i32 {
     match &PROFILE {
         Some(profile) => {
-            let window = Window { handle: hwnd };
-            let properties = window.properties();
+            let properties = hwnd.properties();
             let mut match_found = false;
             for profile_window in &profile.windows {
                 match &profile_window.title {
