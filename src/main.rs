@@ -1,6 +1,7 @@
 extern crate clap;
 use clap::{Arg, App, SubCommand};
 use serde::{Serialize, Deserialize};
+use std::convert::From;
 use std::fmt;
 use std::path::Path;
 #[cfg(windows)] extern crate winapi;
@@ -75,17 +76,13 @@ impl Profile {
 static mut PROFILE: Option<Profile> = None;
 static mut G_DEFER_HDWP: Option<HDWP> = None;
 
-trait HasProperties {
-    fn properties(&self) -> Window;
-}
-
-impl HasProperties for HWND {
-    fn properties(&self) -> Window {
-        let title = get_window_title(*self);
-        let process = get_window_process(*self);
-        let (location, dimensions) = get_window_dimensions(*self);
+impl From<HWND> for Window {
+    fn from(item: HWND) -> Self {
+        let title = get_window_title(item);
+        let process = get_window_process(item);
+        let (location, dimensions) = get_window_dimensions(item);
         Window {
-            hwnd: *self as u64,
+            hwnd: item as u64,
             title: Some(title),
             process: Some(process),
             location: Some(location),
@@ -239,10 +236,10 @@ fn check_valid_window(hwnd: HWND) -> Option<Window> {
         // that don't have a UI, so filter them out to avoid clutter.
         if window_process == "explorer.exe" {
             if !window_title.is_empty() {
-                return Some(hwnd.properties());
+                return Some(hwnd.into());
             }
         } else {
-            return Some(hwnd.properties());
+            return Some(hwnd.into());
         }
     }
     None
