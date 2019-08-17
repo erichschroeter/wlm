@@ -142,8 +142,10 @@ fn get_window_title(hwnd: HWND) -> String {
     String::from_utf16(&window_title).unwrap()
 }
 
+#[allow(dead_code)]
 #[cfg(windows)]
 fn get_last_error_message() -> String {
+    #[allow(unused_assignments)]
     let mut error_code = 0;
 
     unsafe {
@@ -219,7 +221,9 @@ fn get_window_dimensions(hwnd: HWND) -> (Location, Dimensions) {
 
 #[cfg(windows)]
 fn check_valid_window(hwnd: HWND) -> Option<Properties> {
+    #[allow(unused_assignments)]
     let mut is_visible = false;
+    #[allow(unused_assignments)]
     let mut window_exstyle = 0;
     unsafe {
         is_visible = IsWindowVisible(hwnd) != 0;
@@ -394,22 +398,13 @@ fn main() {
         ("ls", Some(matches)) => {
             unsafe {
                 EnumWindows(Some(filter_windows_callback), 0);
-                // TODO is there a way to access PROFILE in a safe manner?
                 match &PROFILE {
-                    Some(list) => {
+                    Some(profile) => {
                         if matches.is_present("as-json") {
-                            match &PROFILE {
-                                Some(profile) => print!("{}", serde_json::to_string_pretty(&profile).unwrap_or_default()),
-                                None => {}
-                            }
+                            print!("{}", serde_json::to_string_pretty(&profile).unwrap_or_default());
                         } else {
-                            match &PROFILE {
-                                Some(profile) => {
-                                    for window in &profile.windows {
-                                        println!("{}", window);
-                                    }
-                                },
-                                None => {}
+                            for window in &profile.windows {
+                                println!("{}", window);
                             }
                         }
                     },
