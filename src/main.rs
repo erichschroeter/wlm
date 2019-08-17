@@ -64,8 +64,21 @@ struct Window {
     handle: HWND,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct Profile {
+    windows: Vec<Properties>,
+}
+
+impl Profile {
+    fn new() -> Profile {
+        Profile {
+            windows: Vec::new(),
+        }
+    }
+}
+
 static mut WINDOW_LIST: Option<Vec<Window>> = None;
-static mut PROFILE: Option<Vec<Properties>> = None;
+static mut PROFILE: Option<Profile> = None;
 static mut G_DEFER_HDWP: Option<HDWP> = None;
 
 trait HasProperties {
@@ -252,7 +265,7 @@ unsafe extern "system" fn apply_profile_callback(
             let window = Window { handle: hwnd };
             let properties = window.properties();
             let mut match_found = false;
-            for profile_window in profile {
+            for profile_window in &profile.windows {
                 match &profile_window.title {
                     Some(profile_title) => {
                         let re = Regex::new(profile_title);
@@ -392,11 +405,11 @@ fn main() {
                 match &WINDOW_LIST {
                     Some(list) => {
                         if matches.is_present("as-json") {
-                            let mut window_list = Vec::new();
+                            let mut profile = Profile::new();
                             for item in list {
-                                window_list.push(item.properties());
+                                profile.windows.push(item.properties());
                             } 
-                            print!("{}", serde_json::to_string_pretty(&window_list).unwrap_or_default());
+                            print!("{}", serde_json::to_string_pretty(&profile).unwrap_or_default());
                         } else {
                             for window in list {
                                 println!("{}", window.properties());
