@@ -356,41 +356,20 @@ unsafe extern "system" fn filter_windows_callback(
     hwnd: HWND,
     _l_param: LPARAM
 ) -> i32 {
-    let is_visible = IsWindowVisible(hwnd) != 0;
-    let window_exstyle = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
-    let is_visible_on_screen = (window_exstyle & WS_EX_WINDOWEDGE as isize) != 0;
-    let is_toolwindow = (window_exstyle & WS_EX_TOOLWINDOW as isize) != 0;
-    if is_visible && is_visible_on_screen && !is_toolwindow {
-        let window_title = get_window_title(hwnd);
-        let window_process = get_window_process(hwnd);
-        let window_process = basename(&window_process);
-        // There are typically a lot of explorer.exe "windows" that get listed that don't have a UI,
-        // so filter them out to avoid clutter.
-        if window_process == "explorer.exe" {
-            if !window_title.is_empty() {
-                match &mut PROFILE {
-                    Some(profile) => profile.windows.push(hwnd.properties()),
-                    None => {
-                        PROFILE = Some(Profile::new());
-                        match &mut PROFILE {
-                            Some(profile) => profile.windows.push(hwnd.properties()),
-                            None => {}
-                        }
-                    }
-                }
-            }
-        } else {
+    match check_valid_window(hwnd) {
+        Some(window) => {
             match &mut PROFILE {
-                Some(profile) => profile.windows.push(hwnd.properties()),
+                Some(profile) => profile.windows.push(window),
                 None => {
                     PROFILE = Some(Profile::new());
                     match &mut PROFILE {
-                        Some(profile) => profile.windows.push(hwnd.properties()),
+                        Some(profile) => profile.windows.push(window),
                         None => {}
                     }
                 }
             }
-        }
+        },
+        None => {}
     }
     1
 }
