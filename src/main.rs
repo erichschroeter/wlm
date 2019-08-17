@@ -48,7 +48,7 @@ pub struct Dimensions {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Properties {
+pub struct Window {
     #[serde(skip_deserializing)]
     #[serde(skip_serializing)]
     // pub hwnd: HWND,
@@ -61,7 +61,7 @@ pub struct Properties {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct Profile {
-    windows: Vec<Properties>,
+    windows: Vec<Window>,
 }
 
 impl Profile {
@@ -76,15 +76,15 @@ static mut PROFILE: Option<Profile> = None;
 static mut G_DEFER_HDWP: Option<HDWP> = None;
 
 trait HasProperties {
-    fn properties(&self) -> Properties;
+    fn properties(&self) -> Window;
 }
 
 impl HasProperties for HWND {
-    fn properties(&self) -> Properties {
+    fn properties(&self) -> Window {
         let title = get_window_title(*self);
         let process = get_window_process(*self);
         let (location, dimensions) = get_window_dimensions(*self);
-        Properties {
+        Window {
             hwnd: *self as u64,
             title: Some(title),
             process: Some(process),
@@ -106,7 +106,7 @@ impl fmt::Display for Dimensions {
     }
 }
 
-impl fmt::Display for Properties {
+impl fmt::Display for Window {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut output = String::new();
         output.push_str(&format!("[{:?}]", self.hwnd as HWND));
@@ -220,7 +220,7 @@ fn get_window_dimensions(hwnd: HWND) -> (Location, Dimensions) {
 }
 
 #[cfg(windows)]
-fn check_valid_window(hwnd: HWND) -> Option<Properties> {
+fn check_valid_window(hwnd: HWND) -> Option<Window> {
     #[allow(unused_assignments)]
     let mut is_visible = false;
     #[allow(unused_assignments)]
@@ -249,18 +249,18 @@ fn check_valid_window(hwnd: HWND) -> Option<Properties> {
 }
 
 #[cfg(windows)]
-fn apply_profile_properties(hdwp: &mut HDWP, hwnd: HWND, properties: &Properties) {
+fn apply_profile_properties(hdwp: &mut HDWP, hwnd: HWND, window: &Window) {
     let mut location = Location { x: 0, y: 0 };
     let mut dimensions = Dimensions { width: 0, height: 0 };
     let mut flags = SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE;
-    match &properties.location {
+    match &window.location {
         Some(new_location) => {
             location.x = new_location.x;
             location.y = new_location.y;
         },
         None => flags |= SWP_NOMOVE,
     }
-    match &properties.dimensions {
+    match &window.dimensions {
         Some(new_dimensions) => {
             dimensions.width = new_dimensions.width;
             dimensions.height = new_dimensions.height;
