@@ -1,0 +1,32 @@
+@startuml "apply_profile Activity Diagram"
+
+start
+note left
+    apply_profile
+end note
+
+repeat
+    if (hwnd != null) then (yes)
+        if (cascade == true) then (yes)
+            if (location for window process X != null) then (yes)
+                :Modify window location
+                to cascade coordinates;
+                note left
+                    The window process
+                    location will be null
+                    if no window process
+                    had been stored previously.
+                end note
+            else (no)
+            endif
+        else (no)
+        endif
+        :apply_window_properties(hwnd, properties);
+        :Store location for window process X;
+    endif
+repeat while (more windows in profile?) is (yes)
+->no;
+
+stop
+
+@enduml

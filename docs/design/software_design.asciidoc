@@ -68,3 +68,10 @@ Within this custom callback function the program can find a specific window give
 ----
 include::EnumWindows_callback_activity_diagram.puml[]
 ----
+
+
+.Apply Profile Activity Diagram
+[plantuml,align="center"]
+----
+include::apply_profile_activity_diagram.puml[]
+----
