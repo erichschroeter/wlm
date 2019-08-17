@@ -77,12 +77,26 @@ impl Profile {
     }
 }
 
-static mut WINDOW_LIST: Option<Vec<Window>> = None;
 static mut PROFILE: Option<Profile> = None;
 static mut G_DEFER_HDWP: Option<HDWP> = None;
 
 trait HasProperties {
     fn properties(&self) -> Properties;
+}
+
+impl HasProperties for HWND {
+    fn properties(&self) -> Properties {
+        let title = get_window_title(*self);
+        let process = get_window_process(*self);
+        let (location, dimensions) = get_window_dimensions(*self);
+        Properties {
+            hwnd: *self as u64,
+            title: Some(title),
+            process: Some(process),
+            location: Some(location),
+            dimensions: Some(dimensions),
+        }
+    }
 }
 
 impl HasProperties for Window {
@@ -348,24 +362,24 @@ unsafe extern "system" fn filter_windows_callback(
         // so filter them out to avoid clutter.
         if window_process == "explorer.exe" {
             if !window_title.is_empty() {
-                match &mut WINDOW_LIST {
-                    Some(list) => list.push(Window { handle: hwnd }),
+                match &mut PROFILE {
+                    Some(profile) => profile.windows.push(hwnd.properties()),
                     None => {
-                        WINDOW_LIST = Some(Vec::new());
-                        match &mut WINDOW_LIST {
-                            Some(list) => list.push(Window { handle: hwnd }),
+                        PROFILE = Some(Profile::new());
+                        match &mut PROFILE {
+                            Some(profile) => profile.windows.push(hwnd.properties()),
                             None => {}
                         }
                     }
                 }
             }
         } else {
-            match &mut WINDOW_LIST {
-                Some(list) => list.push(Window { handle: hwnd }),
+            match &mut PROFILE {
+                Some(profile) => profile.windows.push(hwnd.properties()),
                 None => {
-                    WINDOW_LIST = Some(Vec::new());
-                    match &mut WINDOW_LIST {
-                        Some(list) => list.push(Window { handle: hwnd }),
+                    PROFILE = Some(Profile::new());
+                    match &mut PROFILE {
+                        Some(profile) => profile.windows.push(hwnd.properties()),
                         None => {}
                     }
                 }
@@ -401,18 +415,22 @@ fn main() {
         ("ls", Some(matches)) => {
             unsafe {
                 EnumWindows(Some(filter_windows_callback), 0);
-                // TODO is there a way to access WINDOW_LIST in a safe manner?
-                match &WINDOW_LIST {
+                // TODO is there a way to access PROFILE in a safe manner?
+                match &PROFILE {
                     Some(list) => {
                         if matches.is_present("as-json") {
-                            let mut profile = Profile::new();
-                            for item in list {
-                                profile.windows.push(item.properties());
-                            } 
-                            print!("{}", serde_json::to_string_pretty(&profile).unwrap_or_default());
+                            match &PROFILE {
+                                Some(profile) => print!("{}", serde_json::to_string_pretty(&profile).unwrap_or_default()),
+                                None => {}
+                            }
                         } else {
-                            for window in list {
-                                println!("{}", window.properties());
+                            match &PROFILE {
+                                Some(profile) => {
+                                    for window in &profile.windows {
+                                        println!("{}", window);
+                                    }
+                                },
+                                None => {}
                             }
                         }
                     },
