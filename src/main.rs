@@ -218,6 +218,33 @@ fn get_window_dimensions(hwnd: HWND) -> (Location, Dimensions) {
 }
 
 #[cfg(windows)]
+fn check_valid_window(hwnd: HWND) -> Option<Properties> {
+    let mut is_visible = false;
+    let mut window_exstyle = 0;
+    unsafe {
+        is_visible = IsWindowVisible(hwnd) != 0;
+        window_exstyle = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+    }
+    let is_visible_on_screen = (window_exstyle & WS_EX_WINDOWEDGE as isize) != 0;
+    let is_toolwindow = (window_exstyle & WS_EX_TOOLWINDOW as isize) != 0;
+    if is_visible && is_visible_on_screen && !is_toolwindow {
+        let window_title = get_window_title(hwnd);
+        let window_process = get_window_process(hwnd);
+        let window_process = basename(&window_process);
+        // There are typically a lot of explorer.exe "windows" that get listed
+        // that don't have a UI, so filter them out to avoid clutter.
+        if window_process == "explorer.exe" {
+            if !window_title.is_empty() {
+                return Some(hwnd.properties());
+            }
+        } else {
+            return Some(hwnd.properties());
+        }
+    }
+    None
+}
+
+#[cfg(windows)]
 fn apply_profile_properties(hdwp: &mut HDWP, hwnd: HWND, properties: &Properties) {
     let mut location = Location { x: 0, y: 0 };
     let mut dimensions = Dimensions { width: 0, height: 0 };
