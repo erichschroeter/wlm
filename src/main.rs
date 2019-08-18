@@ -278,6 +278,23 @@ fn apply_profile_properties(hdwp: &mut HDWP, hwnd: HWND, window: &Window) {
 }
 
 #[cfg(windows)]
+fn apply_profile(profile: &Profile, hdwp: &mut HDWP) {
+    unsafe {
+        *hdwp = BeginDeferWindowPos(1);
+    }
+
+    for window in &profile.windows {
+        apply_profile_properties(hdwp, window.hwnd as HWND, &window);
+    }
+
+    if *hdwp != NULL {
+        unsafe {
+            EndDeferWindowPos(*hdwp);
+        }
+    }
+}
+
+#[cfg(windows)]
 unsafe extern "system" fn apply_profile_callback(
     hwnd: HWND,
     _l_param: LPARAM
