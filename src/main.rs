@@ -48,12 +48,18 @@ pub struct Dimensions {
     pub height: i32,
 }
 
+fn default_as_true() -> bool {
+    true
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Window {
     #[serde(skip_deserializing)]
     #[serde(skip_serializing)]
     // pub hwnd: HWND,
     pub hwnd: Vec<u64>,
+    #[serde(default = "default_as_true")]
+    pub allow_cascade: bool,
     pub title: Option<String>,
     pub process: Option<String>,
     pub location: Option<Location>,
@@ -83,6 +89,7 @@ impl From<HWND> for Window {
         let (location, dimensions) = get_window_dimensions(item);
         Window {
             hwnd: vec![item as u64],
+            allow_cascade: true,
             title: Some(title),
             process: Some(process),
             location: Some(location),
@@ -250,7 +257,7 @@ fn check_valid_window(hwnd: HWND) -> Option<Window> {
 fn apply_profile_properties(hdwp: &mut HDWP, hwnd: HWND, window: &Window) {
     let mut location = Location { x: 0, y: 0 };
     let mut dimensions = Dimensions { width: 0, height: 0 };
-    let mut flags = SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE;
+    let mut flags = /*SWP_NOZORDER | */SWP_NOOWNERZORDER | SWP_NOACTIVATE;
     match &window.location {
         Some(new_location) => {
             location.x = new_location.x;
@@ -278,8 +285,11 @@ fn apply_profile_properties(hdwp: &mut HDWP, hwnd: HWND, window: &Window) {
     }
 }
 
+use std::collections::HashMap;
+
 #[cfg(windows)]
 fn apply_profile(profile: &Profile) {
+    let mut cascade_map: HashMap<String, Location> = HashMap::new();
     #[allow(unused_assignments)]
     let mut hdwp = NULL;
     unsafe {
@@ -288,7 +298,24 @@ fn apply_profile(profile: &Profile) {
 
     for window in &profile.windows {
         for hwnd in &window.hwnd {
-            apply_profile_properties(&mut hdwp, *hwnd as HWND, &window);
+            if window.allow_cascade && window.location.is_some() {
+                let process = window.process.clone().unwrap();
+                match cascade_map.get_mut(&process) {
+                    Some(mut location) => {
+                        location.x += 30;
+                        location.y += 30;
+                        let mut window_clone = window.clone();
+                        window_clone.location = Some(location.to_owned());
+                        apply_profile_properties(&mut hdwp, *hwnd as HWND, &window_clone);
+                    },
+                    None => {
+                        cascade_map.insert(process, window.location.clone().unwrap());
+                        apply_profile_properties(&mut hdwp, *hwnd as HWND, &window);
+                    }
+                }
+            } else {
+                apply_profile_properties(&mut hdwp, *hwnd as HWND, &window);
+            }
         }
     }
 
