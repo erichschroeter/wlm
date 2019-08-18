@@ -257,7 +257,39 @@ fn check_valid_window(hwnd: HWND) -> Option<Window> {
 fn apply_profile_properties(hdwp: &mut HDWP, hwnd: HWND, window: &Window) {
     let mut location = Location { x: 0, y: 0 };
     let mut dimensions = Dimensions { width: 0, height: 0 };
-    let mut flags = /*SWP_NOZORDER | */SWP_NOOWNERZORDER | SWP_NOACTIVATE;
+    /*
+     * 0x0020 | SWP_DRAWFRAME      | Draws a frame (defined in the window's class
+     *        |                    | description) around the window.
+     * 0x0020 | SWP_FRAMECHANGED   | Sends a WM_NCCALCSIZE message to the window,
+     *        |                    | even if the window's size is not being changed.
+     *        |                    | If this flag is not specified, WM_NCCALCSIZE
+     *        |                    | is sent only when the window's size is being changed.
+     * 0x0080 | SWP_HIDEWINDOW     | Hides the window.
+     * 0x0010 | SWP_NOACTIVATE     | Does not activate the window. If this flag is
+     *        |                    | not set, the window is activated and moved to
+     *        |                    | the top of either the topmost or non-topmost
+     *        |                    | group (depending on the setting of the hWndInsertAfter parameter).
+     * 0x0100 | SWP_NOCOPYBITS     | Discards the entire contents of the client area.
+     *        |                    | If this flag is not specified, the valid contents
+     *        |                    | of the client area are saved and copied back into
+     *        |                    | the client area after the window is sized or repositioned.
+     * 0x0002 | SWP_NOMOVE         | Retains the current position (ignores the x and y parameters).
+     * 0x0200 | SWP_NOOWNERZORDER  | Does not change the owner window's position in the Z order.
+     * 0x0008 | SWP_NOREDRAW       | Does not redraw changes. If this flag is set,
+     *        |                    | no repainting of any kind occurs. This applies
+     *        |                    | to the client area, the nonclient area (including
+     *        |                    | the title bar and scroll bars), and any part of
+     *        |                    | the parent window uncovered as a result of the
+     *        |                    | window being moved. When this flag is set, the
+     *        |                    | application must explicitly invalidate or redraw
+     *        |                    | any parts of the window and parent window that need redrawing.
+     * 0x0200 | SWP_NOREPOSITION   | Same as the SWP_NOOWNERZORDER flag.
+     * 0x0400 | SWP_NOSENDCHANGING | Prevents the window from receiving the WM_WINDOWPOSCHANGING message.
+     * 0x0001 | SWP_NOSIZE         | Retains the current size (ignores the cx and cy parameters).
+     * 0x0004 | SWP_NOZORDER       | Retains the current Z order (ignores the hWndInsertAfter parameter).
+     * 0x0040 | SWP_SHOWWINDOW     | Displays the window.
+     */
+    let mut flags = SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE;
     match &window.location {
         Some(new_location) => {
             location.x = new_location.x;
