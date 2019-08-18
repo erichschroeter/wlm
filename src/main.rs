@@ -53,7 +53,7 @@ pub struct Window {
     #[serde(skip_deserializing)]
     #[serde(skip_serializing)]
     // pub hwnd: HWND,
-    pub hwnd: u64,
+    pub hwnd: Vec<u64>,
     pub title: Option<String>,
     pub process: Option<String>,
     pub location: Option<Location>,
@@ -82,7 +82,7 @@ impl From<HWND> for Window {
         let process = get_window_process(item);
         let (location, dimensions) = get_window_dimensions(item);
         Window {
-            hwnd: item as u64,
+            hwnd: vec![item as u64],
             title: Some(title),
             process: Some(process),
             location: Some(location),
@@ -106,7 +106,8 @@ impl fmt::Display for Dimensions {
 impl fmt::Display for Window {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut output = String::new();
-        output.push_str(&format!("[{:?}]", self.hwnd as HWND));
+        // output.push_str(&format!("[{:?}]", self.hwnd as HWND));
+        // output.push_str(&format!("[{}]", self.hwnd.join(", ")));
         match &self.title {
             Some(title) => output.push_str(&format!("\n\t\"{}\"", title)),
             None => {}
@@ -286,7 +287,9 @@ fn apply_profile(profile: &Profile) {
     }
 
     for window in &profile.windows {
-        apply_profile_properties(&mut hdwp, window.hwnd as HWND, &window);
+        for hwnd in &window.hwnd {
+            apply_profile_properties(&mut hdwp, *hwnd as HWND, &window);
+        }
     }
 
     if hdwp != NULL {
@@ -388,7 +391,7 @@ fn main() {
                                                     match &active_window.title {
                                                         Some(hwnd_title) => {
                                                             if re.is_match(hwnd_title) {
-                                                                profile_window.hwnd = active_window.hwnd;
+                                                                profile_window.hwnd.extend(&active_window.hwnd);
                                                                 match_found = true;
                                                             } else {
                                                                 // eprintln!("'{}' did not match", hwnd_title)
@@ -409,7 +412,7 @@ fn main() {
                                                             match &active_window.process {
                                                                 Some(hwnd_process) => {
                                                                     if re.is_match(hwnd_process) {
-                                                                        profile_window.hwnd = active_window.hwnd;
+                                                                        profile_window.hwnd.extend(&active_window.hwnd);
                                                                         match_found = true;
                                                                     } else {
                                                                         // eprintln!("'{}' did not match", hwnd_process)
