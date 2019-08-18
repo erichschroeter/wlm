@@ -36,19 +36,19 @@ use winapi::um::errhandlingapi::GetLastError;
 
 const MAX_WINDOW_TITLE: usize = 128;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Location {
     pub x: i32,
     pub y: i32,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Dimensions {
     pub width: i32,
     pub height: i32,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Window {
     #[serde(skip_deserializing)]
     #[serde(skip_serializing)]
@@ -73,7 +73,7 @@ impl Profile {
     }
 }
 
-static mut PROFILE: Option<Profile> = None;
+static mut ACTIVE_WINDOWS: Option<Vec<Window>> = None;
 static mut G_DEFER_HDWP: Option<HDWP> = None;
 
 impl From<HWND> for Window {
@@ -278,89 +278,22 @@ fn apply_profile_properties(hdwp: &mut HDWP, hwnd: HWND, window: &Window) {
 }
 
 #[cfg(windows)]
-fn apply_profile(profile: &Profile, hdwp: &mut HDWP) {
+fn apply_profile(profile: &Profile) {
+    #[allow(unused_assignments)]
+    let mut hdwp = NULL;
     unsafe {
-        *hdwp = BeginDeferWindowPos(1);
+        hdwp = BeginDeferWindowPos(1);
     }
 
     for window in &profile.windows {
-        apply_profile_properties(hdwp, window.hwnd as HWND, &window);
+        apply_profile_properties(&mut hdwp, window.hwnd as HWND, &window);
     }
 
-    if *hdwp != NULL {
+    if hdwp != NULL {
         unsafe {
-            EndDeferWindowPos(*hdwp);
+            EndDeferWindowPos(hdwp);
         }
     }
-}
-
-#[cfg(windows)]
-unsafe extern "system" fn apply_profile_callback(
-    hwnd: HWND,
-    _l_param: LPARAM
-) -> i32 {
-    match &mut PROFILE {
-        Some(profile) => {
-            match check_valid_window(hwnd) {
-                Some(hwnd_window) => {
-                    let mut match_found = false;
-                    for profile_window in &mut profile.windows {
-                        match &profile_window.title {
-                            Some(profile_title) => {
-                                let re = Regex::new(profile_title);
-                                match re {
-                                    Ok(re) => {
-                                        match &hwnd_window.title {
-                                            Some(hwnd_title) => {
-                                                if re.is_match(hwnd_title) {
-                                                    profile_window.hwnd = hwnd as u64;
-                                                    match_found = true;
-                                                } else {
-                                                    // eprintln!("'{}' did not match", hwnd_title)
-                                                }
-                                            },
-                                            None => {}
-                                        }
-                                    },
-                                    Err(e) => { eprintln!("Invalid regex: {}", e) }
-                                }
-                            },
-                            None => {
-                                match &profile_window.process {
-                                    Some(profile_process) => {
-                                        let re = Regex::new(profile_process);
-                                        match re {
-                                            Ok(re) => {
-                                                match &hwnd_window.process {
-                                                    Some(hwnd_process) => {
-                                                        if re.is_match(hwnd_process) {
-                                                            profile_window.hwnd = hwnd as u64;
-                                                            match_found = true;
-                                                        } else {
-                                                            // eprintln!("'{}' did not match", hwnd_process)
-                                                        }
-                                                    },
-                                                    None => {}
-                                                }
-                                            },
-                                            Err(e) => { eprintln!("Invalid regex: {}", e) }
-                                        }
-                                    },
-                                    None => {}
-                                }
-                            }
-                        }
-                        if match_found {
-                            break;
-                        }
-                    }
-                },
-                None => {}
-            }
-        },
-        None => {}
-    }
-    1
 }
 
 #[cfg(windows)]
@@ -370,12 +303,12 @@ unsafe extern "system" fn filter_windows_callback(
 ) -> i32 {
     match check_valid_window(hwnd) {
         Some(window) => {
-            match &mut PROFILE {
-                Some(profile) => profile.windows.push(window),
+            match &mut ACTIVE_WINDOWS {
+                Some(active_windows) => active_windows.push(window),
                 None => {
-                    PROFILE = Some(Profile::new());
-                    match &mut PROFILE {
-                        Some(profile) => profile.windows.push(window),
+                    ACTIVE_WINDOWS = Some(Vec::new());
+                    match &mut ACTIVE_WINDOWS {
+                        Some(active_windows) => active_windows.push(window),
                         None => {}
                     }
                 }
@@ -412,12 +345,12 @@ fn main() {
         ("ls", Some(matches)) => {
             unsafe {
                 EnumWindows(Some(filter_windows_callback), 0);
-                match &PROFILE {
-                    Some(profile) => {
+                match &ACTIVE_WINDOWS {
+                    Some(active_windows) => {
                         if matches.is_present("as-json") {
-                            print!("{}", serde_json::to_string_pretty(&profile).unwrap_or_default());
+                            print!("{}", serde_json::to_string_pretty(&active_windows).unwrap_or_default());
                         } else {
-                            for window in &profile.windows {
+                            for window in active_windows {
                                 println!("{}", window);
                             }
                         }
@@ -429,33 +362,81 @@ fn main() {
         ("apply", Some(matches)) => {
             let profile = matches.value_of("PROFILE").unwrap();
             let json = std::fs::read_to_string(profile).expect("Failed reading profile");
+            #[allow(unused_assignments)]
+            let mut active_windows = None;
             unsafe {
-                PROFILE = Some(serde_json::from_str(&json).unwrap());
-                EnumWindows(Some(apply_profile_callback), 0);
-                G_DEFER_HDWP = Some(BeginDeferWindowPos(1));
-                match &PROFILE {
-                    Some(profile) => {
-                        for window in &profile.windows {
-                            if window.hwnd != 0 {
-                                match G_DEFER_HDWP {
-                                    Some(mut hdwp) => {
-                                        apply_profile_properties(&mut hdwp, window.hwnd as HWND, window);
-                                    },
-                                    None => eprintln!("BeginDeferWindowPos was not called before DeferWindowPos"),
+                EnumWindows(Some(filter_windows_callback), 0);
+                active_windows = ACTIVE_WINDOWS.clone();
+            }
+            match active_windows {
+                Some(active_windows) => {
+                    let profile: serde_json::Result<Profile> = serde_json::from_str(&json);
+                    match profile {
+                        Ok(mut profile) => {
+                            for active_window in &active_windows {
+                                // Find a match in our user-defined profile for the active window.
+                                // If a match cannot be found, then simply ignore.
+                                // If a match is found, assign the HWND to the user-defined profile attribute.
+
+                                let mut match_found = false;
+                                for profile_window in &mut profile.windows {
+                                    match &profile_window.title {
+                                        Some(profile_title) => {
+                                            let re = Regex::new(profile_title);
+                                            match re {
+                                                Ok(re) => {
+                                                    match &active_window.title {
+                                                        Some(hwnd_title) => {
+                                                            if re.is_match(hwnd_title) {
+                                                                profile_window.hwnd = active_window.hwnd;
+                                                                match_found = true;
+                                                            } else {
+                                                                // eprintln!("'{}' did not match", hwnd_title)
+                                                            }
+                                                        },
+                                                        None => {}
+                                                    }
+                                                },
+                                                Err(e) => { eprintln!("Invalid regex: {}", e) }
+                                            }
+                                        },
+                                        None => {
+                                            match &profile_window.process {
+                                                Some(profile_process) => {
+                                                    let re = Regex::new(profile_process);
+                                                    match re {
+                                                        Ok(re) => {
+                                                            match &active_window.process {
+                                                                Some(hwnd_process) => {
+                                                                    if re.is_match(hwnd_process) {
+                                                                        profile_window.hwnd = active_window.hwnd;
+                                                                        match_found = true;
+                                                                    } else {
+                                                                        // eprintln!("'{}' did not match", hwnd_process)
+                                                                    }
+                                                                },
+                                                                None => {}
+                                                            }
+                                                        },
+                                                        Err(e) => { eprintln!("Invalid regex: {}", e) }
+                                                    }
+                                                },
+                                                None => {}
+                                            }
+                                        }
+                                    }
+                                    if match_found {
+                                        break;
+                                    }
                                 }
+
                             }
-                        }
-                    },
-                    None => {}
-                }
-                match G_DEFER_HDWP {
-                    Some(hdwp) => {
-                        if hdwp != NULL {
-                            EndDeferWindowPos(hdwp);
-                        }
-                    },
-                    None => {}
-                }
+                            apply_profile(&profile);
+                        },
+                        Err(e) => eprintln!("Invalid profile: {}", e)
+                    }
+                },
+                None => {}
             }
         }
         _ => {}
