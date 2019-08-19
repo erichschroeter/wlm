@@ -337,7 +337,7 @@ fn apply_profile(profile: &Profile) {
 
     for window in &profile.windows {
         for hwnd in &window.hwnd {
-            if window.allow_cascade && window.location.is_some() {
+            if window.allow_cascade && window.location.is_some() && window.process.is_some() {
                 let process = window.process.clone().unwrap();
                 match cascade_map.get_mut(&process) {
                     Some(mut location) => {
