@@ -113,8 +113,7 @@ impl fmt::Display for Dimensions {
 impl fmt::Display for Window {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut output = String::new();
-        // output.push_str(&format!("[{:?}]", self.hwnd as HWND));
-        // output.push_str(&format!("[{}]", self.hwnd.join(", ")));
+        output.push_str(&format!("{:?}", (&self.hwnd).into_iter().map(|i| format!("0x{:x}", i)).collect::<Vec<String>>()));
         match &self.title {
             Some(title) => output.push_str(&format!("\n\t\"{}\"", title)),
             None => {}
