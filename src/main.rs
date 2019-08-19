@@ -27,6 +27,8 @@ use winapi::um::winuser::{WM_NULL, HDWP, BeginDeferWindowPos, DeferWindowPos, En
 use winapi::um::winuser::{SWP_NOZORDER, SWP_NOOWNERZORDER, SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOMOVE};
 use winapi::um::winnt::HANDLE;
 use winapi::um::winnt::{PROCESS_QUERY_INFORMATION, PROCESS_VM_READ};
+use winapi::um::dwmapi::DwmGetWindowAttribute;
+use winapi::um::dwmapi::DWMWA_CLOAKED;
 use winapi::um::processthreadsapi::OpenProcess;
 use winapi::um::psapi::GetModuleFileNameExW;
 use winapi::um::handleapi::CloseHandle;
@@ -235,7 +237,7 @@ fn check_valid_window(hwnd: HWND) -> Option<Window> {
     }
     let is_visible_on_screen = (window_exstyle & WS_EX_WINDOWEDGE as isize) != 0;
     let is_toolwindow = (window_exstyle & WS_EX_TOOLWINDOW as isize) != 0;
-    if is_visible && is_visible_on_screen && !is_toolwindow {
+    if is_visible && is_visible_on_screen && !is_toolwindow && !is_invisible_win10_background_app_window(hwnd) {
         let window_title = get_window_title(hwnd);
         let window_process = get_window_process(hwnd);
         let window_process = basename(&window_process);
@@ -250,6 +252,21 @@ fn check_valid_window(hwnd: HWND) -> Option<Window> {
         }
     }
     None
+}
+
+// See https://stackoverflow.com/questions/32149880/how-to-identify-windows-10-background-store-processes-that-have-non-displayed-wi
+#[cfg(windows)]
+fn is_invisible_win10_background_app_window(hwnd: HWND) -> bool {
+    let mut cloaked_value: u32 = 0;
+    let mut my_ptr = &mut cloaked_value as *mut u32;
+    unsafe {
+        DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, my_ptr as *mut winapi::ctypes::c_void, std::mem::size_of::<u32>() as u32);
+        if cloaked_value != 0 {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 #[cfg(windows)]
