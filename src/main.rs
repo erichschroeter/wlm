@@ -38,6 +38,8 @@ use winapi::um::errhandlingapi::GetLastError;
 
 const MAX_WINDOW_TITLE: usize = 128;
 
+static mut ACTIVE_WINDOWS: Option<Vec<Window>> = None;
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Location {
     pub x: i32,
@@ -80,9 +82,6 @@ impl Profile {
         }
     }
 }
-
-static mut ACTIVE_WINDOWS: Option<Vec<Window>> = None;
-static mut G_DEFER_HDWP: Option<HDWP> = None;
 
 impl From<HWND> for Window {
     fn from(item: HWND) -> Self {
@@ -258,8 +257,8 @@ fn check_valid_window(hwnd: HWND) -> Option<Window> {
 #[cfg(windows)]
 fn is_invisible_win10_background_app_window(hwnd: HWND) -> bool {
     let mut cloaked_value: u32 = 0;
-    let mut my_ptr = &mut cloaked_value as *mut u32;
     unsafe {
+        let my_ptr = &mut cloaked_value as *mut u32;
         DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, my_ptr as *mut winapi::ctypes::c_void, std::mem::size_of::<u32>() as u32);
         if cloaked_value != 0 {
             true
