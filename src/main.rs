@@ -75,14 +75,6 @@ struct Profile {
     windows: Vec<Window>,
 }
 
-impl Profile {
-    fn new() -> Profile {
-        Profile {
-            windows: Vec::new(),
-        }
-    }
-}
-
 impl From<HWND> for Window {
     fn from(item: HWND) -> Self {
         let title = get_window_title(item);
@@ -425,7 +417,10 @@ fn main() {
                 match &ACTIVE_WINDOWS {
                     Some(active_windows) => {
                         if matches.is_present("as-json") {
-                            print!("{}", serde_json::to_string_pretty(&active_windows).unwrap_or_default());
+                            let profile = Profile {
+                                windows: active_windows.to_vec(),
+                            };
+                            print!("{}", serde_json::to_string_pretty(&profile).unwrap_or_default());
                         } else {
                             for window in active_windows {
                                 println!("{}", window);
