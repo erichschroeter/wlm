@@ -2,6 +2,7 @@
 Erich Schroeter <erich.schroeter@magnetek.com>
 v1.0, 2019-08-11
 :toc:
+:icons: font
 :program-name: window-layout-manager
 
 This document provides a centralized location to view design documentation for the *window-layout-manager* program.
@@ -20,7 +21,7 @@ The program is not very complicated, or at least started off that way, but is de
 .Use Cases
 [plantuml,align="center"]
 ----
-include::use_case_diagram.puml[]
+include::plantuml/use_case_diagram.puml[]
 ----
 
 === Create a profile
@@ -66,12 +67,12 @@ Within this custom callback function the program can find a specific window give
 .EnumWindows Callback Activity Diagram
 [plantuml,align="center"]
 ----
-include::EnumWindows_callback_activity_diagram.puml[]
+include::plantuml/EnumWindows_callback_activity_diagram.puml[]
 ----
 
 
 .Apply Profile Activity Diagram
 [plantuml,align="center"]
 ----
-include::apply_profile_activity_diagram.puml[]
+include::plantuml/apply_profile_activity_diagram.puml[]
 ----
