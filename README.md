@@ -1,3 +1,5 @@
+![Continuous Integration](https://github.com/erichschroeter/window-layout-manager/workflows/Continuous%20Integration/badge.svg)
+
 _window-layout-manager_ is a utility program that can automatically move and resize windows based on a profile.
 
 # Constructing a profile
