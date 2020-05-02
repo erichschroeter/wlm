@@ -1,10 +1,33 @@
-@startuml
+@startuml Program Use Cases
 left to right direction
 
-:User:
+:User: << Program >>
 
-:User: --> (Create a profile)
-:User: --> (Apply a profile)
-:User: --> (List active windows)
+rectangle config {
+    (Create a profile) as (Create)
+    (Load a profile) as (Load)
+    (Get a config value) as (Get)
+    (Set a config value) as (Set)
+
+    :User: --> (Create)
+    :User: --> (Get)
+    :User: --> (Set)
+    (Set) --> (Create)
+    (Set) --> (Load)
+    (Get) --> (Load)
+}
+
+rectangle apply {
+    (Apply a profile) as (Apply)
+
+    :User: --> (Apply)
+    (Apply) --> (Load)
+}
+
+rectangle ls {
+    (List active windows) as (List)
+
+    :User: --> (List)
+}
 
 @enduml

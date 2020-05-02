@@ -1,36 +1,59 @@
 ![Continuous Integration](https://github.com/erichschroeter/window-layout-manager/workflows/Continuous%20Integration/badge.svg)
 
-_window-layout-manager_ is a utility program that can automatically move and resize windows based on a profile.
+**wlm** is a command-line tool to move and resize windows based on a config.
 
-# Constructing a profile
+# Rationale
 
-A profile is a list of windows and their respective properties.
+**wlm** started as an open source replacement to http://www.stefandidak.com/windows-layout-manager/ and a way for me to get more experience with [Rust](https://www.rust-lang.org/).
+The intent is to provide cross-platform support, with Windows being the first to be implemented.
 
-Creating a profile file can be done by executing the `ls` command with the `--as-json` flag.
-This will output [JSON](http://json.org/) text that can be saved to a file and modified.
+# Installation
 
-## Bash / CommandPrompt
+    cargo install wlm
 
-    window-layout-manager ls --as-json > myprofile.json
+# How to Use
 
-## PowerShell
+## Create a config
 
-Redirecting the output in [PowerShell](https://docs.microsoft.com/en-us/powershell/) requires special attention due to the default encoding used by PowerShell.
-The JSON profile file needs to be UTF-8 compatible.
+A config is a list of windows and their respective properties.
 
-_**NOTE:** If the window title has non-ASCII characters this method may not work if filtering by the window title._
+    wlm init
 
-    window-layout-manager ls --as-json | Out-File -Encoding ASCII myprofile.json
+By default, this will create a `default.json` in your platform-specific location.
+This is determined by the [directories](https://crates.io/crates/directories) library.
+Multiple configs can be created by using the `--file` argument.
 
-# Applying a profile
+## View available window information
 
-    window-layout-manager apply myprofile.json
+Once a window is in a state you like, get its information via the `ls` command.
 
-# Customizing a profile
+    wlm ls
 
-As of _version 1.0_, profiles are pretty bare-bones, offering support for specifying the following properties of a window:
+## Modify a config
 
-* Position (_x_ and _y_ coordinates of the upper-left corner of the window)
-* Dimensions (_width_ and _height_ of the window)
+The following example will create a new window in your config:
 
-More properties may be added in the future.
+    wlm add --process "chrome.exe" -x 0 -y 0 -w 800 -H 600
+
+And now that, that window exists it can be modified via the following example:
+
+    wlm config windows.0.process "chrome.exe"
+    wlm config windows.0.x 0
+    wlm config windows.0.y 0
+    wlm config windows.0.w 800
+    wlm config windows.0.h 600
+
+To view your existing config:
+
+    wlm config
+
+# TODO
+
+- [x] Add support for default config location
+    - `$HOME/.config/wlm/default.json`
+- [x] Add support for modifying existing config via CLI
+    - e.g. `wlm config windows.2.process "chrome.exe"`
+- [ ] Add support for specifying monitor
+- [ ] Add support for percentage-based configs
+    - e.g. similar to how tiling window managers work or Windows snapping
+- [ ] Add support for a daemon/service that will auto apply config on new window events

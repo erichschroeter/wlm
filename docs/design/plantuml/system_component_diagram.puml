@@ -1,0 +1,32 @@
+@startuml System Component Diagram
+left to right direction
+
+package "JSON Config" {
+    component [Config] as Config
+    component [Window] as Window
+
+    Window <-- Config
+}
+
+component [Program] as Program
+component [WindowManager] as WindowManager
+component [WindowState] as WindowState
+Program --> Config
+Program --> WindowManager
+WindowManager -> "0..*" WindowState
+
+package "Microsoft Windows" {
+    component [HWND] as HWND
+
+    WindowState ..> HWND : "winapi"
+}
+
+package "Linux" {
+    component [X11 Handle] as X11Id
+    component [Wayland Handle] as WaylandId
+
+    WindowState ..> X11Id : "x11-dl"
+    WindowState ..> WaylandId : "wayland-client"
+}
+
+@enduml

@@ -1,0 +1,61 @@
+@startuml Config Activity Diagram
+
+start
+
+floating note
+The ""config"" command gets or sets options in a config file.
+
+Example for getting an option:
+""config <config-option>""
+
+Example for setting an option:
+""config <config-option> <value>""
+end note
+
+if (""--file <file>"" specified?) then (yes)
+    :Use ""--file <file>"" value;
+else (no)
+    :Use default location;
+    note left
+    Default locations change based on the OS the program is executed on.
+    e.g. ""$XDG_CONFIG_HOME/Window Layout Manager/config"" on Unix
+    or ""%APPDATA%/Window Layout Manager/config"" on Windows
+    end note
+endif
+
+partition "Validate config path" {
+    if (Is path a file?) then (yes)
+        if (Does file exist?) then (yes)
+            :Parse file;
+            if (Is valid?) then (yes)
+            else (no)
+                :Print error;
+                end
+            endif
+        else (no)
+            :Instantiate default config;
+        endif
+    else (no)
+        :Print error;
+        end
+    endif
+}
+
+if (Is ""<config-option>"" value specified?) then (yes)
+    if (Is ""<value>"" value specified?) then (yes)
+        :Set ""<config-option>"" value;
+        :Update config file;
+        note right
+        If file does not exist
+        create it (recursively).
+        end note
+    else (no)
+        :Print existing ""config-option"" value;
+    endif
+else (no)
+    :Print existing config;
+endif
+
+end
+
+@enduml
