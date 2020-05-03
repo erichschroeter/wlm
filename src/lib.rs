@@ -199,51 +199,48 @@ impl Config {
 		}
 	}
 
-    pub fn print_windows(&self) {
-        let mut table = Table::new();
-        table.set_format(*format::consts::FORMAT_NO_COLSEP);
-        table.add_row(Row::new(vec![
-            Cell::new("Title").style_spec("c"),
-            Cell::new("Process").style_spec("c"),
-            Cell::new("Position").style_spec("c"),
-            Cell::new("Dimension").style_spec("c"),
-        ]));
-        for w in &self.windows {
-            let mut row = Row::new(vec![]);
-            if let Some(title) = &w.title {
-                row.add_cell(Cell::new(&shrink(&title, 32))
-                    .with_style(Attr::ForegroundColor(color::RED)));
-            } else {
-                row.add_cell(Cell::new(""));
-            }
-            if let Some(process) = &w.process {
-                row.add_cell(Cell::new(&shrink(&process, 64))
-                    .with_style(Attr::ForegroundColor(color::GREEN)));
-            } else {
-                row.add_cell(Cell::new(""));
-            }
-            match (w.x, w.y) {
-                (Some(x), Some(y)) => row.add_cell(Cell::new(
-                    &format!("({}, {})", x, y))),
-                (None, Some(y)) => row.add_cell(Cell::new(
-                    &format!("(null, {})", y))),
-                (Some(x), None) => row.add_cell(Cell::new(
-                    &format!("({}, null)", x))),
-                _ => row.add_cell(Cell::new("")),
-            }
-            match (w.w, w.h) {
-                (Some(w), Some(h)) => row.add_cell(Cell::new(
-                    &format!("{} x {}", w, h))),
-                (None, Some(h)) => row.add_cell(Cell::new(
-                    &format!("null x {}", h))),
-                (Some(w), None) => row.add_cell(Cell::new(
-                    &format!("{} x null", w))),
-                _ => row.add_cell(Cell::new("")),
-            }
-            table.add_row(row);
-        }
-        table.printstd();
-    }
+	pub fn print_windows(&self) {
+		let mut table = Table::new();
+		table.set_format(*format::consts::FORMAT_NO_COLSEP);
+		table.add_row(Row::new(vec![
+			Cell::new("Title").style_spec("c"),
+			Cell::new("Process").style_spec("c"),
+			Cell::new("Position").style_spec("c"),
+			Cell::new("Dimension").style_spec("c"),
+		]));
+		for w in &self.windows {
+			let mut row = Row::new(vec![]);
+			if let Some(title) = &w.title {
+				row.add_cell(
+					Cell::new(&shrink(&title, 32)).with_style(Attr::ForegroundColor(color::RED)),
+				);
+			} else {
+				row.add_cell(Cell::new(""));
+			}
+			if let Some(process) = &w.process {
+				row.add_cell(
+					Cell::new(&shrink(&process, 64))
+						.with_style(Attr::ForegroundColor(color::GREEN)),
+				);
+			} else {
+				row.add_cell(Cell::new(""));
+			}
+			match (w.x, w.y) {
+				(Some(x), Some(y)) => row.add_cell(Cell::new(&format!("({}, {})", x, y))),
+				(None, Some(y)) => row.add_cell(Cell::new(&format!("(null, {})", y))),
+				(Some(x), None) => row.add_cell(Cell::new(&format!("({}, null)", x))),
+				_ => row.add_cell(Cell::new("")),
+			}
+			match (w.w, w.h) {
+				(Some(w), Some(h)) => row.add_cell(Cell::new(&format!("{} x {}", w, h))),
+				(None, Some(h)) => row.add_cell(Cell::new(&format!("null x {}", h))),
+				(Some(w), None) => row.add_cell(Cell::new(&format!("{} x null", w))),
+				_ => row.add_cell(Cell::new("")),
+			}
+			table.add_row(row);
+		}
+		table.printstd();
+	}
 }
 
 impl Default for Config {
