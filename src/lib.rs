@@ -235,15 +235,29 @@ impl<'a> WindowManager<'a> {
 }
 
 fn shrink(the_string: &str, shrink_len: usize) -> String {
-	if the_string.len() > shrink_len {
+	if the_string.chars().count() > shrink_len {
 		let mut shrinked = String::new();
 		if shrink_len % 2 == 0 {
-			shrinked.push_str(&the_string[..(shrink_len / 2 - 2)]);
+			for (i, c) in the_string.chars().enumerate() {
+				shrinked.push(c);
+				if i >= (shrink_len / 2 - 2) - 1 {
+					break;
+				}
+			}
 		} else {
-			shrinked.push_str(&the_string[..(shrink_len / 2 - 1)]);
+			for (i, c) in the_string.chars().enumerate() {
+				shrinked.push(c);
+				if i >= (shrink_len / 2 - 1) - 1 {
+					break;
+				}
+			}
 		}
 		shrinked.push_str("...");
-		shrinked.push_str(&the_string[(the_string.len() - (shrink_len / 2) + 1)..]);
+		for (i, c) in the_string.chars().enumerate() {
+			if i >= (the_string.len() - (shrink_len / 2) + 1) {
+				shrinked.push(c);
+			}
+		}
 		shrinked
 	} else {
 		the_string.to_string()
@@ -376,6 +390,14 @@ mod tests {
 		#[test]
 		fn same_string_if_string_length_is_equal_to_shrink_length() {
 			assert_eq!("aaabbbccc", shrink("aaabbbccc", 9));
+		}
+
+		#[test]
+		fn handles_unicode_char_on_char_boundary() {
+			// Fixes the following panic error:
+			// panicked at 'byte index 9 is not a char boundary; it is inside '’' (bytes 7..10) of `aa‘bb’cc`'
+			let title_with_unicode = "aa‘bb’cc";
+			assert_eq!(title_with_unicode, shrink(title_with_unicode, 8));
 		}
 	}
 
