@@ -11,7 +11,7 @@ use window_layout_manager::{Config, WindowBuilder, WindowManager};
 
 fn main() -> Result<(), ExitFailure> {
 	let matches = App::new("wlm")
-		.version("0.1.1")
+		.version("0.2.0")
 		.about("Move and resize windows.")
 		.arg(
 			Arg::with_name("file")
