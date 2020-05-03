@@ -11,8 +11,8 @@ use window_layout_manager::{Config, TablePrinter, WindowBuilder, WindowManager};
 
 fn main() -> Result<(), ExitFailure> {
 	let matches = App::new("wlm")
-		.version("3.0")
-		.about("Reposition windows.")
+		.version("0.1.1")
+		.about("Move and resize windows.")
 		.arg(
 			Arg::with_name("file")
 				.short("f")
