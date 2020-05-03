@@ -47,6 +47,14 @@ To view your existing config:
 
     wlm config
 
+## Apply a config
+
+Now to apply the config:
+
+    wlm apply
+
+To apply a different config, simply specify it with the `--file` argument.
+
 # TODO
 
 - [x] Add support for default config location
