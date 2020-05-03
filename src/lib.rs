@@ -10,6 +10,7 @@ use assert_fs::prelude::*;
 #[cfg(test)]
 use predicates::prelude::*;
 
+use prettytable::{color, format, Attr, Cell, Row, Table};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::fs::OpenOptions;
@@ -197,6 +198,49 @@ impl Config {
 			None => Err(Error::InvalidIndex),
 		}
 	}
+
+	pub fn print_windows(&self) {
+		let mut table = Table::new();
+		table.set_format(*format::consts::FORMAT_NO_COLSEP);
+		table.add_row(Row::new(vec![
+			Cell::new("Title").style_spec("c"),
+			Cell::new("Process").style_spec("c"),
+			Cell::new("Position").style_spec("c"),
+			Cell::new("Dimension").style_spec("c"),
+		]));
+		for w in &self.windows {
+			let mut row = Row::new(vec![]);
+			if let Some(title) = &w.title {
+				row.add_cell(
+					Cell::new(&shrink(&title, 32)).with_style(Attr::ForegroundColor(color::RED)),
+				);
+			} else {
+				row.add_cell(Cell::new(""));
+			}
+			if let Some(process) = &w.process {
+				row.add_cell(
+					Cell::new(&shrink(&process, 64))
+						.with_style(Attr::ForegroundColor(color::GREEN)),
+				);
+			} else {
+				row.add_cell(Cell::new(""));
+			}
+			match (w.x, w.y) {
+				(Some(x), Some(y)) => row.add_cell(Cell::new(&format!("({}, {})", x, y))),
+				(None, Some(y)) => row.add_cell(Cell::new(&format!("(null, {})", y))),
+				(Some(x), None) => row.add_cell(Cell::new(&format!("({}, null)", x))),
+				_ => row.add_cell(Cell::new("")),
+			}
+			match (w.w, w.h) {
+				(Some(w), Some(h)) => row.add_cell(Cell::new(&format!("{} x {}", w, h))),
+				(None, Some(h)) => row.add_cell(Cell::new(&format!("null x {}", h))),
+				(Some(w), None) => row.add_cell(Cell::new(&format!("{} x null", w))),
+				_ => row.add_cell(Cell::new("")),
+			}
+			table.add_row(row);
+		}
+		table.printstd();
+	}
 }
 
 impl Default for Config {
@@ -235,74 +279,32 @@ impl<'a> WindowManager<'a> {
 }
 
 fn shrink(the_string: &str, shrink_len: usize) -> String {
-	if the_string.len() > shrink_len {
+	if the_string.chars().count() > shrink_len {
 		let mut shrinked = String::new();
 		if shrink_len % 2 == 0 {
-			shrinked.push_str(&the_string[..(shrink_len / 2 - 2)]);
+			for (i, c) in the_string.chars().enumerate() {
+				shrinked.push(c);
+				if i >= (shrink_len / 2 - 2) - 1 {
+					break;
+				}
+			}
 		} else {
-			shrinked.push_str(&the_string[..(shrink_len / 2 - 1)]);
+			for (i, c) in the_string.chars().enumerate() {
+				shrinked.push(c);
+				if i >= (shrink_len / 2 - 1) - 1 {
+					break;
+				}
+			}
 		}
 		shrinked.push_str("...");
-		shrinked.push_str(&the_string[(the_string.len() - (shrink_len / 2) + 1)..]);
+		for (i, c) in the_string.chars().enumerate() {
+			if i >= (the_string.len() - (shrink_len / 2) + 1) {
+				shrinked.push(c);
+			}
+		}
 		shrinked
 	} else {
 		the_string.to_string()
-	}
-}
-
-pub trait TablePrinter {
-	fn print_header<W: std::io::Write>(&self, w: &mut W) -> std::io::Result<()>;
-	fn print_table<W: std::io::Write>(&self, w: &mut W) -> std::io::Result<()>;
-}
-
-impl TablePrinter for Config {
-	fn print_header<W: std::io::Write>(&self, w: &mut W) -> std::io::Result<()> {
-		let mut buffer = String::new();
-		buffer.push_str(&format!("{:^20}", "Title"));
-		buffer.push_str(&format!(" | {:^20}", "Process"));
-		buffer.push_str(&format!(" |{:^6}", "X"));
-		buffer.push_str(&format!(" |{:^6}", "Y"));
-		buffer.push_str(&format!(" |{:^6}", "W"));
-		buffer.push_str(&format!(" |{:^6}", "H"));
-		write!(w, "{}\n", buffer.to_string())
-	}
-
-	fn print_table<W: std::io::Write>(&self, w: &mut W) -> std::io::Result<()> {
-		let mut buffer = String::new();
-		for window in &self.windows {
-			if let Some(title) = &window.title {
-				buffer.push_str(&format!("{:>20}", shrink(title, 20)));
-			} else {
-				buffer.push_str("                    ");
-			}
-			if let Some(process) = &window.process {
-				buffer.push_str(&format!(" | {:>20}", shrink(process, 20)));
-			} else {
-				buffer.push_str(" |                     ");
-			}
-			if let Some(x) = &window.x {
-				buffer.push_str(&format!(" |{:>6}", x.to_string()));
-			} else {
-				buffer.push_str(" |      ");
-			}
-			if let Some(y) = &window.y {
-				buffer.push_str(&format!(" |{:>6}", y.to_string()));
-			} else {
-				buffer.push_str(" |      ");
-			}
-			if let Some(w) = &window.w {
-				buffer.push_str(&format!(" |{:>6}", w.to_string()));
-			} else {
-				buffer.push_str(" |      ");
-			}
-			if let Some(h) = &window.h {
-				buffer.push_str(&format!(" |{:>6}", h.to_string()));
-			} else {
-				buffer.push_str(" |      ");
-			}
-			buffer.push_str("\n");
-		}
-		write!(w, "{}", buffer.to_string())
 	}
 }
 
@@ -316,31 +318,6 @@ mod tests {
 			assert_eq!(
 				(0, "x".to_string()),
 				Config::parse_property_string("windows.0.x").unwrap()
-			);
-		}
-	}
-
-	mod print_table {
-		use super::super::*;
-
-		#[test]
-		fn config_with_single_window() {
-			let mut config = Config::new();
-			let window_1 = WindowBuilder::default()
-				.title(Some(String::from("Window 1")))
-				.process(Some(String::from("example.exe")))
-				.x(Some(100))
-				.y(Some(100))
-				.w(Some(100))
-				.h(Some(100))
-				.build()
-				.unwrap();
-			config.windows.push(window_1);
-			let mut buffer = Vec::new();
-			assert!(config.print_table(&mut buffer).is_ok());
-			assert_eq!(
-				"            Window 1 |          example.exe |   100 |   100 |   100 |   100\n",
-				std::str::from_utf8(&buffer).unwrap()
 			);
 		}
 	}
@@ -376,6 +353,14 @@ mod tests {
 		#[test]
 		fn same_string_if_string_length_is_equal_to_shrink_length() {
 			assert_eq!("aaabbbccc", shrink("aaabbbccc", 9));
+		}
+
+		#[test]
+		fn handles_unicode_char_on_char_boundary() {
+			// Fixes the following panic error:
+			// panicked at 'byte index 9 is not a char boundary; it is inside '’' (bytes 7..10) of `aa‘bb’cc`'
+			let title_with_unicode = "aa‘bb’cc";
+			assert_eq!(title_with_unicode, shrink(title_with_unicode, 8));
 		}
 	}
 
