@@ -7,7 +7,7 @@ use exitfailure::ExitFailure;
 use failure::ResultExt;
 use std::env;
 use std::path::Path;
-use window_layout_manager::{Config, TablePrinter, WindowBuilder, WindowManager};
+use window_layout_manager::{Config, WindowBuilder, WindowManager};
 
 fn main() -> Result<(), ExitFailure> {
 	let matches = App::new("wlm")
@@ -230,8 +230,7 @@ fn main() -> Result<(), ExitFailure> {
 					}
 				}
 				_ => {
-					config.print_header(&mut std::io::stdout())?;
-					config.print_table(&mut std::io::stdout())?;
+					config.print_windows();
 				}
 			}
 		}
