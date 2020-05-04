@@ -7,7 +7,9 @@ use exitfailure::ExitFailure;
 use failure::ResultExt;
 use std::env;
 use std::path::Path;
-use window_layout_manager::{Config, WindowBuilder, WindowManager};
+use window_layout_manager::config::Config;
+use window_layout_manager::window::WindowBuilder;
+use window_layout_manager::WindowManager;
 
 fn main() -> Result<(), ExitFailure> {
 	let matches = App::new("wlm")
@@ -127,6 +129,9 @@ fn main() -> Result<(), ExitFailure> {
 	match matches.subcommand() {
 		("ls", Some(_matches)) => {
 			WindowManager::new(None).print();
+			for m in WindowManager::new(None).monitors() {
+				println!("{:?}", m);
+			}
 		}
 		("init", Some(matches)) => {
 			if matches.is_present("force") {

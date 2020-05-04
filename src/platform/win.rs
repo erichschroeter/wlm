@@ -1,15 +1,16 @@
-use crate::MAX_WINDOW_TITLE_LENGTH;
 #[cfg(windows)]
+use crate::MAX_WINDOW_TITLE_LENGTH;
 use crate::{shrink, Config};
 
 use prettytable::{color, format, Attr, Cell, Row, Table};
 use std::path::Path;
+use std::ptr;
 use winapi::{
 	shared::{
 		minwindef::{BOOL, DWORD, HINSTANCE, LPARAM, MAX_PATH, TRUE},
 		ntdef::{NULL, WCHAR},
+		windef::{HDC, HMONITOR, LPRECT},
 		windef::{HWND, RECT},
-        windef::{HDC, HMONITOR, LPRECT},
 	},
 	um::{
 		dwmapi::{DwmGetWindowAttribute, DWMWA_CLOAKED},
@@ -18,37 +19,36 @@ use winapi::{
 		psapi::GetModuleFileNameExW,
 		winnt::{HANDLE, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ},
 		winuser::{
-			self, BeginDeferWindowPos, DeferWindowPos, EndDeferWindowPos, EnumWindows, GetWindowLongPtrW,
-			GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible, GWL_EXSTYLE,
-			HDWP, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER, WM_NULL,
-			WS_EX_TOOLWINDOW, WS_EX_WINDOWEDGE,
+			self, BeginDeferWindowPos, DeferWindowPos, EndDeferWindowPos, EnumWindows,
+			GetWindowLongPtrW, GetWindowRect, GetWindowTextW, GetWindowThreadProcessId,
+			IsWindowVisible, GWL_EXSTYLE, HDWP, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER,
+			SWP_NOSIZE, SWP_NOZORDER, WM_NULL, WS_EX_TOOLWINDOW, WS_EX_WINDOWEDGE,
 		},
 	},
 };
-use std::ptr;
 
 unsafe extern "system" fn monitor_enum_proc(
-    hmonitor: HMONITOR,
-    _hdc: HDC,
-    _place: LPRECT,
-    data: LPARAM,
+	hmonitor: HMONITOR,
+	_hdc: HDC,
+	_place: LPRECT,
+	data: LPARAM,
 ) -> BOOL {
-    let monitors = data as *mut Vec<Monitor>;
-    (*monitors).push(Monitor::new(hmonitor));
-    TRUE // continue enumeration
+	let monitors = data as *mut Vec<Monitor>;
+	(*monitors).push(Monitor::new(hmonitor));
+	TRUE // continue enumeration
 }
 
 pub fn list_monitors() -> Vec<Monitor> {
-    let mut monitors: Vec<Monitor> = Vec::new();
-    unsafe {
-        winuser::EnumDisplayMonitors(
-            ptr::null_mut(),
-            ptr::null_mut(),
-            Some(monitor_enum_proc),
-            &mut monitors as *mut _ as LPARAM,
-        );
-    }
-    monitors
+	let mut monitors: Vec<Monitor> = Vec::new();
+	unsafe {
+		winuser::EnumDisplayMonitors(
+			ptr::null_mut(),
+			ptr::null_mut(),
+			Some(monitor_enum_proc),
+			&mut monitors as *mut _ as LPARAM,
+		);
+	}
+	monitors
 }
 
 #[derive(Debug)]
@@ -406,7 +406,8 @@ unsafe extern "system" fn filter_windows_callback(hwnd: HWND, l_param: LPARAM) -
 mod tests {
 	mod apply_config {
 		use super::super::*;
-		use crate::{ConfigBuilder, WindowBuilder};
+		use crate::config::ConfigBuilder;
+		use crate::window::WindowBuilder;
 
 		#[test]
 		fn window_state_x_updated_to_matching_config() {
