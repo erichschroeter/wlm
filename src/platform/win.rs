@@ -4,27 +4,26 @@ use crate::{shrink, Config};
 
 use prettytable::{color, format, Attr, Cell, Row, Table};
 use std::path::Path;
-use winapi::shared::minwindef::{DWORD, HINSTANCE, LPARAM, MAX_PATH};
-use winapi::shared::ntdef::NULL;
-use winapi::shared::ntdef::WCHAR;
-use winapi::shared::windef::HWND;
-use winapi::shared::windef::RECT;
-use winapi::um::dwmapi::{DwmGetWindowAttribute, DWMWA_CLOAKED};
-// use winapi::um::errhandlingapi::GetLastError;
-use winapi::um::handleapi::CloseHandle;
-use winapi::um::processthreadsapi::OpenProcess;
-use winapi::um::psapi::GetModuleFileNameExW;
-// use winapi::um::winbase::{
-// 	FormatMessageW, FORMAT_MESSAGE_ARGUMENT_ARRAY, FORMAT_MESSAGE_FROM_SYSTEM,
-// 	FORMAT_MESSAGE_IGNORE_INSERTS,
-// };
-use winapi::um::winnt::HANDLE;
-use winapi::um::winnt::{PROCESS_QUERY_INFORMATION, PROCESS_VM_READ};
-use winapi::um::winuser::{
-	BeginDeferWindowPos, DeferWindowPos, EndDeferWindowPos, EnumWindows, GetWindowLongPtrW,
-	GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible, GWL_EXSTYLE, HDWP,
-	SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER, WM_NULL,
-	WS_EX_TOOLWINDOW, WS_EX_WINDOWEDGE,
+use winapi::{
+	shared::{
+		minwindef::{BOOL, DWORD, HINSTANCE, LPARAM, MAX_PATH, TRUE},
+		ntdef::{NULL, WCHAR},
+		windef::{HWND, RECT},
+        windef::{HDC, HMONITOR, LPRECT},
+	},
+	um::{
+		dwmapi::{DwmGetWindowAttribute, DWMWA_CLOAKED},
+		handleapi::CloseHandle,
+		processthreadsapi::OpenProcess,
+		psapi::GetModuleFileNameExW,
+		winnt::{HANDLE, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ},
+		winuser::{
+			self, BeginDeferWindowPos, DeferWindowPos, EndDeferWindowPos, EnumWindows, GetWindowLongPtrW,
+			GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible, GWL_EXSTYLE,
+			HDWP, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER, WM_NULL,
+			WS_EX_TOOLWINDOW, WS_EX_WINDOWEDGE,
+		},
+	},
 };
 
 #[derive(Debug, Clone, PartialEq)]
