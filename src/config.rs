@@ -369,5 +369,17 @@ mod tests {
 				assert!(window.is_err());
 			}
 		}
+
+		mod parse_property_string {
+			use super::super::super::*;
+
+			#[test]
+			fn windows_0_x() {
+				assert_eq!(
+					(0, "x".to_string()),
+					Config::parse_property_string("windows.0.x").unwrap()
+				);
+			}
+		}
 	}
 }

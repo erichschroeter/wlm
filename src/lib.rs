@@ -8,46 +8,13 @@ extern crate regex;
 #[cfg(windows)]
 #[path = "platform/mod.rs"]
 pub mod platform;
-#[cfg(windows)]
-use platform as sys;
 
 pub mod config;
 pub mod error;
 pub mod window;
-
-use config::Config;
+pub mod wm;
 
 pub const MAX_WINDOW_TITLE_LENGTH: usize = 128;
-
-pub struct WindowManager<'a> {
-	config: Option<&'a Config>,
-}
-
-pub trait ProvidesWindowList<'a> {
-	fn windows(&self, config: Option<&'a Config>) -> Option<Vec<sys::WindowState>>;
-}
-
-impl<'a> WindowManager<'a> {
-	pub fn new(config: Option<&'a Config>) -> Self {
-		WindowManager { config }
-	}
-
-	pub fn monitors(&self) -> Vec<sys::Monitor> {
-		sys::list_monitors()
-	}
-
-	pub fn windows(&self) -> Option<Vec<sys::WindowState>> {
-		sys::list_windows(self.config)
-	}
-
-	pub fn layout(&self) {
-		sys::layout_windows(self.config)
-	}
-
-	pub fn print(&self) {
-		sys::print_windows(self.config)
-	}
-}
 
 fn shrink(the_string: &str, shrink_len: usize) -> String {
 	if the_string.chars().count() > shrink_len {
@@ -81,18 +48,6 @@ fn shrink(the_string: &str, shrink_len: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-	mod parse_property_string {
-		use super::super::*;
-
-		#[test]
-		fn windows_0_x() {
-			assert_eq!(
-				(0, "x".to_string()),
-				Config::parse_property_string("windows.0.x").unwrap()
-			);
-		}
-	}
-
 	mod shrink {
 		use super::super::*;
 
