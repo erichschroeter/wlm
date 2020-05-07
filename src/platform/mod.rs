@@ -1,5 +1,6 @@
 #[cfg(windows)]
-pub mod win;
+#[path = "windows/mod.rs"]
+pub mod windows;
 
 #[cfg(windows)]
-pub use win::*;
+pub use windows::window::*;
