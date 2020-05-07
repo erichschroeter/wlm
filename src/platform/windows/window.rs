@@ -1,6 +1,9 @@
 #[cfg(windows)]
 use crate::MAX_WINDOW_TITLE_LENGTH;
-use crate::{config::{Config, Window}, shrink};
+use crate::{
+	config::{Config, Window},
+	shrink,
+};
 
 use prettytable::{color, format, Attr, Cell, Row, Table};
 use std::path::Path;

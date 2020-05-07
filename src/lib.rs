@@ -5,12 +5,9 @@ extern crate failure;
 extern crate failure_derive;
 extern crate regex;
 
-#[cfg(windows)]
-#[path = "platform/mod.rs"]
-pub mod platform;
-
 pub mod config;
 pub mod error;
+pub mod platform;
 pub mod window;
 pub mod wm;
 
