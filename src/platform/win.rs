@@ -1,6 +1,6 @@
 #[cfg(windows)]
 use crate::MAX_WINDOW_TITLE_LENGTH;
-use crate::{config::Config, shrink};
+use crate::{config::{Config, Window}, shrink};
 
 use prettytable::{color, format, Attr, Cell, Row, Table};
 use std::path::Path;
@@ -147,6 +147,19 @@ pub fn layout_windows<'a>(config: Option<&'a Config>) {
 	if let Some(config) = config {
 		if let Some(mut windows) = list_windows(None) {
 			apply_config(config, &mut windows);
+		}
+	}
+}
+
+impl From<WindowState> for Window {
+	fn from(ws: WindowState) -> Self {
+		Window {
+			title: ws.title,
+			process: ws.process,
+			x: ws.x,
+			y: ws.y,
+			w: ws.w,
+			h: ws.h,
 		}
 	}
 }
@@ -406,8 +419,7 @@ unsafe extern "system" fn filter_windows_callback(hwnd: HWND, l_param: LPARAM) -
 mod tests {
 	mod apply_config {
 		use super::super::*;
-		use crate::config::ConfigBuilder;
-		use crate::window::WindowBuilder;
+		use crate::config::{ConfigBuilder, WindowBuilder};
 
 		#[test]
 		fn window_state_x_updated_to_matching_config() {

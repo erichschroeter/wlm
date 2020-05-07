@@ -7,7 +7,42 @@ use std::path::PathBuf;
 use crate::error::{Error, Result};
 use crate::platform as sys;
 use crate::shrink;
-use crate::window::Window;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Builder)]
+#[builder(setter(into))]
+pub struct Window {
+	#[builder(default)]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub title: Option<String>,
+	#[builder(default)]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub process: Option<String>,
+	#[builder(default)]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub x: Option<i32>,
+	#[builder(default)]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub y: Option<i32>,
+	#[builder(default)]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub w: Option<i32>,
+	#[builder(default)]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub h: Option<i32>,
+}
+
+impl Window {
+	pub fn new() -> Self {
+		Window {
+			title: None,
+			process: None,
+			x: None,
+			y: None,
+			w: None,
+			h: None,
+		}
+	}
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Builder)]
 #[builder(setter(into))]
@@ -177,7 +212,6 @@ impl Default for Config {
 
 #[cfg(test)]
 mod tests {
-	use crate::window::WindowBuilder;
 	use assert_fs::prelude::*;
 	use predicates::prelude::*;
 
@@ -240,7 +274,6 @@ mod tests {
 
 		mod search {
 			use super::super::super::*;
-			use super::super::*;
 
 			#[test]
 			fn matches_window_given_simple_title_only() {
@@ -350,7 +383,6 @@ mod tests {
 
 		mod window_at {
 			use super::super::super::*;
-			use super::super::*;
 
 			#[test]
 			fn gets_first() {

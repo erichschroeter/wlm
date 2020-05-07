@@ -7,7 +7,7 @@ use exitfailure::ExitFailure;
 use failure::ResultExt;
 use std::env;
 use std::path::Path;
-use window_layout_manager::{config::Config, window::WindowBuilder, wm::WindowManager};
+use window_layout_manager::{config::Config, config::WindowBuilder, wm::WindowManager};
 
 fn main() -> Result<(), ExitFailure> {
 	let matches = App::new("wlm")
