@@ -15,7 +15,7 @@ impl<'a> WindowManager<'a> {
 	}
 
 	pub fn windows(&self) -> Option<Vec<platform::WindowState>> {
-		platform::list_windows(self.config)
+		platform::list_microsoft_windows(self.config)
 	}
 
 	pub fn layout(&self) {

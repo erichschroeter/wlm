@@ -102,7 +102,15 @@ struct Windows<'a> {
 	list: Vec<WindowState>,
 }
 
-pub fn list_windows<'a>(config: Option<&'a Config>) -> Option<Vec<WindowState>> {
+pub fn list_windows<'a>(config: Option<&'a Config>) -> Option<Vec<Window>> {
+	if let Some(list) = list_microsoft_windows(config) {
+		Some(list.into_iter().map(Into::into).collect())
+	} else {
+		None
+	}
+}
+
+pub fn list_microsoft_windows<'a>(config: Option<&'a Config>) -> Option<Vec<WindowState>> {
 	let mut windows_state = Windows {
 		config: config,
 		list: Vec::new(),
@@ -148,7 +156,7 @@ pub fn print_windows<'a>(config: Option<&'a Config>) {
 
 pub fn layout_windows<'a>(config: Option<&'a Config>) {
 	if let Some(config) = config {
-		if let Some(mut windows) = list_windows(None) {
+		if let Some(mut windows) = list_microsoft_windows(None) {
 			apply_config(config, &mut windows);
 		}
 	}
