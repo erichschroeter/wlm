@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::platform as sys;
+use crate::platform;
 
 pub struct WindowManager<'a> {
 	config: Option<&'a Config>,
@@ -10,19 +10,19 @@ impl<'a> WindowManager<'a> {
 		WindowManager { config }
 	}
 
-	pub fn monitors(&self) -> Vec<sys::Monitor> {
-		sys::list_monitors()
+	pub fn monitors(&self) -> Vec<platform::Monitor> {
+		platform::list_monitors()
 	}
 
-	pub fn windows(&self) -> Option<Vec<sys::WindowState>> {
-		sys::list_windows(self.config)
+	pub fn windows(&self) -> Option<Vec<platform::WindowState>> {
+		platform::list_windows(self.config)
 	}
 
 	pub fn layout(&self) {
-		sys::layout_windows(self.config)
+		platform::layout_windows(self.config)
 	}
 
 	pub fn print(&self) {
-		sys::print_windows(self.config)
+		platform::print_windows(self.config)
 	}
 }
