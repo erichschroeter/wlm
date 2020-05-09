@@ -62,7 +62,6 @@ impl Monitor {
 #[derive(Debug, Clone, PartialEq)]
 pub struct WindowState {
 	pub hwnd: HWND,
-	pub cascade: bool,
 	pub title: Option<String>,
 	pub process: Option<String>,
 	pub x: Option<i32>,
@@ -81,7 +80,6 @@ impl WindowState {
 	pub fn new() -> Self {
 		WindowState {
 			hwnd: 0 as HWND,
-			cascade: true,
 			title: None,
 			process: None,
 			x: None,
@@ -146,7 +144,6 @@ impl From<HWND> for WindowState {
 		let (x, y, w, h) = get_window_dimensions(item);
 		WindowState {
 			hwnd: item,
-			cascade: true,
 			title: Some(title),
 			process: Some(process),
 			x: Some(x),
