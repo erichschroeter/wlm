@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::config::{Config, Window};
 use crate::platform;
 
 pub struct WindowManager<'a> {
@@ -14,8 +14,8 @@ impl<'a> WindowManager<'a> {
 		platform::list_monitors()
 	}
 
-	pub fn windows(&self) -> Option<Vec<platform::WindowState>> {
-		platform::list_microsoft_windows(self.config)
+	pub fn windows(&self) -> Option<Vec<Window>> {
+		platform::list_windows(self.config)
 	}
 
 	pub fn layout(&self) {
