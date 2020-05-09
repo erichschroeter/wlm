@@ -13,7 +13,7 @@ pub mod wm;
 
 pub const MAX_WINDOW_TITLE_LENGTH: usize = 128;
 
-fn shrink(the_string: &str, shrink_len: usize) -> String {
+pub fn shrink(the_string: &str, shrink_len: usize) -> String {
 	if the_string.chars().count() > shrink_len {
 		let mut shrinked = String::new();
 		if shrink_len % 2 == 0 {

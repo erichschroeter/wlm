@@ -7,7 +7,10 @@ use exitfailure::ExitFailure;
 use failure::ResultExt;
 use std::env;
 use std::path::Path;
-use window_layout_manager::{config::Config, config::WindowBuilder, wm::WindowManager};
+use window_layout_manager::{
+	config::{print_windows_tty, Config, WindowBuilder},
+	wm::WindowManager,
+};
 
 fn main() -> Result<(), ExitFailure> {
 	let matches = App::new("wlm")
@@ -126,7 +129,9 @@ fn main() -> Result<(), ExitFailure> {
 	}
 	match matches.subcommand() {
 		("ls", Some(_matches)) => {
-			WindowManager::new(None).print();
+			if let Some(windows) = WindowManager::windows(&Config::new()) {
+				print_windows_tty(&windows);
+			}
 			for m in WindowManager::new(None).monitors() {
 				println!("{:?}", m);
 			}
@@ -266,7 +271,7 @@ fn main() -> Result<(), ExitFailure> {
 					}
 				}
 				_ => {
-					config.print_windows();
+					print_windows_tty(&config.windows);
 				}
 			}
 		}

@@ -1,5 +1,7 @@
-use crate::config::{Config, Window};
-use crate::platform;
+use crate::{
+	config::{Config, Window},
+	platform,
+};
 
 pub struct WindowManager<'a> {
 	config: Option<&'a Config>,
@@ -14,15 +16,11 @@ impl<'a> WindowManager<'a> {
 		platform::list_monitors()
 	}
 
-	pub fn windows(&self) -> Option<Vec<Window>> {
-		platform::list_windows(self.config)
+	pub fn windows(config: &Config) -> Option<Vec<Window>> {
+		platform::list_windows(Some(config))
 	}
 
 	pub fn layout(&self) {
 		platform::layout_windows(self.config)
-	}
-
-	pub fn print(&self) {
-		platform::print_windows(self.config)
 	}
 }

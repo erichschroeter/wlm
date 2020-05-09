@@ -44,6 +44,67 @@ impl Window {
 	}
 }
 
+fn get_position_string<T: std::fmt::Display>(x: Option<T>, y: Option<T>) -> String {
+	match (x, y) {
+		(Some(x), Some(y)) => format!("({}, {})", x, y),
+		(None, Some(y)) => format!("(null, {})", y),
+		(Some(x), None) => format!("({}, null)", x),
+		_ => "".to_string(),
+	}
+}
+
+fn get_dimensions_string<T: std::fmt::Display>(width: Option<T>, height: Option<T>) -> String {
+	match (width, height) {
+		(Some(w), Some(h)) => format!("{} x {}", w, h),
+		(None, Some(h)) => format!("null x {}", h),
+		(Some(w), None) => format!("{} x null", w),
+		_ => "".to_string(),
+	}
+}
+
+fn get_window_table(windows: &[Window]) -> Table {
+	let mut table = Table::new();
+	table.set_format(*format::consts::FORMAT_NO_COLSEP);
+	table.add_row(Row::new(vec![
+		Cell::new("Title").style_spec("c"),
+		Cell::new("Process").style_spec("c"),
+		Cell::new("Position").style_spec("c"),
+		Cell::new("Dimension").style_spec("c"),
+	]));
+	for w in windows {
+		let mut row = Row::empty();
+		if let Some(title) = &w.title {
+			row.add_cell(
+				Cell::new(&shrink(title, 32)).with_style(Attr::ForegroundColor(color::RED)),
+			);
+		} else {
+			row.add_cell(Cell::default());
+		}
+		if let Some(process) = &w.process {
+			row.add_cell(
+				Cell::new(&shrink(process, 64)).with_style(Attr::ForegroundColor(color::GREEN)),
+			);
+		} else {
+			row.add_cell(Cell::default());
+		}
+		row.add_cell(Cell::new(&get_position_string(w.x, w.y)));
+		row.add_cell(Cell::new(&get_dimensions_string(w.w, w.h)));
+		table.add_row(row);
+	}
+	table
+}
+
+pub fn print_windows<T>(windows: &[Window], out: &mut T)
+where
+	T: std::io::Write + ?Sized,
+{
+	let _ = get_window_table(windows).print(out);
+}
+
+pub fn print_windows_tty(windows: &[Window]) {
+	let _ = get_window_table(windows).printstd();
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Builder)]
 #[builder(setter(into))]
 pub struct Config {
@@ -156,49 +217,6 @@ impl Config {
 			None => Err(Error::InvalidIndex),
 		}
 	}
-
-	pub fn print_windows(&self) {
-		let mut table = Table::new();
-		table.set_format(*format::consts::FORMAT_NO_COLSEP);
-		table.add_row(Row::new(vec![
-			Cell::new("Title").style_spec("c"),
-			Cell::new("Process").style_spec("c"),
-			Cell::new("Position").style_spec("c"),
-			Cell::new("Dimension").style_spec("c"),
-		]));
-		for w in &self.windows {
-			let mut row = Row::new(vec![]);
-			if let Some(title) = &w.title {
-				row.add_cell(
-					Cell::new(&shrink(&title, 32)).with_style(Attr::ForegroundColor(color::RED)),
-				);
-			} else {
-				row.add_cell(Cell::new(""));
-			}
-			if let Some(process) = &w.process {
-				row.add_cell(
-					Cell::new(&shrink(&process, 64))
-						.with_style(Attr::ForegroundColor(color::GREEN)),
-				);
-			} else {
-				row.add_cell(Cell::new(""));
-			}
-			match (w.x, w.y) {
-				(Some(x), Some(y)) => row.add_cell(Cell::new(&format!("({}, {})", x, y))),
-				(None, Some(y)) => row.add_cell(Cell::new(&format!("(null, {})", y))),
-				(Some(x), None) => row.add_cell(Cell::new(&format!("({}, null)", x))),
-				_ => row.add_cell(Cell::new("")),
-			}
-			match (w.w, w.h) {
-				(Some(w), Some(h)) => row.add_cell(Cell::new(&format!("{} x {}", w, h))),
-				(None, Some(h)) => row.add_cell(Cell::new(&format!("null x {}", h))),
-				(Some(w), None) => row.add_cell(Cell::new(&format!("{} x null", w))),
-				_ => row.add_cell(Cell::new("")),
-			}
-			table.add_row(row);
-		}
-		table.printstd();
-	}
 }
 
 impl Default for Config {
@@ -214,6 +232,44 @@ impl Default for Config {
 mod tests {
 	use assert_fs::prelude::*;
 	use predicates::prelude::*;
+
+	mod get_position_string {
+		use super::super::*;
+
+		#[test]
+		fn x_prints_as_null() {
+			assert_eq!("(null, 100)", get_position_string(None, Some(100)));
+		}
+
+		#[test]
+		fn y_prints_as_null() {
+			assert_eq!("(100, null)", get_position_string(Some(100), None));
+		}
+
+		#[test]
+		fn nothing_printed_when_x_and_y_are_null() {
+			assert_eq!("", get_position_string(None as Option<&str>, None));
+		}
+	}
+
+	mod get_dimensions_string {
+		use super::super::*;
+
+		#[test]
+		fn width_prints_as_null() {
+			assert_eq!("null x 100", get_dimensions_string(None, Some(100)));
+		}
+
+		#[test]
+		fn height_prints_as_null() {
+			assert_eq!("100 x null", get_dimensions_string(Some(100), None));
+		}
+
+		#[test]
+		fn nothing_printed_when_w_and_h_are_null() {
+			assert_eq!("", get_dimensions_string(None as Option<&str>, None));
+		}
+	}
 
 	mod config {
 		mod new {

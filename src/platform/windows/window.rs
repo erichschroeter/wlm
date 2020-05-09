@@ -1,11 +1,7 @@
+use crate::config::{Config, Window};
 #[cfg(windows)]
 use crate::MAX_WINDOW_TITLE_LENGTH;
-use crate::{
-	config::{Config, Window},
-	shrink,
-};
 
-use prettytable::{color, format, Attr, Cell, Row, Table};
 use std::path::Path;
 use std::ptr;
 use winapi::{
@@ -120,38 +116,6 @@ pub fn list_microsoft_windows<'a>(config: Option<&'a Config>) -> Option<Vec<Wind
 		EnumWindows(Some(filter_windows_callback), struct_ptr as LPARAM);
 	}
 	Some(windows_state.list)
-}
-
-pub fn print_windows<'a>(config: Option<&'a Config>) {
-	let mut table = Table::new();
-	if let Some(windows) = list_windows(config) {
-		table.set_format(*format::consts::FORMAT_NO_COLSEP);
-		table.add_row(Row::new(vec![
-			Cell::new("Title").style_spec("c"),
-			Cell::new("Process").style_spec("c"),
-			Cell::new("Position").style_spec("c"),
-			Cell::new("Dimension").style_spec("c"),
-		]));
-		for w in windows {
-			table.add_row(Row::new(vec![
-				Cell::new(&shrink(w.title.as_ref().unwrap(), 32))
-					.with_style(Attr::ForegroundColor(color::RED)),
-				Cell::new(&shrink(w.process.as_ref().unwrap(), 64))
-					.with_style(Attr::ForegroundColor(color::GREEN)),
-				Cell::new(&format!(
-					"({}, {})",
-					w.x.as_ref().unwrap(),
-					w.y.as_ref().unwrap()
-				)),
-				Cell::new(&format!(
-					"{} x {}",
-					w.w.as_ref().unwrap(),
-					w.h.as_ref().unwrap()
-				)),
-			]));
-		}
-	}
-	table.printstd();
 }
 
 pub fn layout_windows<'a>(config: Option<&'a Config>) {
