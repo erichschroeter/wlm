@@ -29,6 +29,11 @@ fn main() -> Result<(), ExitFailure> {
 				.about(
 					"Lists active windows and their properies.",
 				)
+				.arg(
+					Arg::with_name("monitors")
+						.help("List available monitors")
+						.long("monitors"),
+				),
 		)
 		.subcommand(
 			SubCommand::with_name("init")
@@ -124,11 +129,14 @@ fn main() -> Result<(), ExitFailure> {
 	}
 	match matches.subcommand() {
 		("ls", Some(_matches)) => {
-			if let Some(windows) = WindowManager::windows(&Config::new()) {
-				print_windows_tty(&windows);
-			}
-			for m in WindowManager::monitors() {
-				println!("{:?}", m);
+			if _matches.is_present("monitors") {
+				for m in WindowManager::monitors() {
+					println!("{:?}", m);
+				}
+			} else {
+				if let Some(windows) = WindowManager::windows(&Config::new()) {
+					print_windows_tty(&windows);
+				}
 			}
 		}
 		("init", Some(matches)) => {
