@@ -59,7 +59,7 @@ mod tests {
 		}
 
 		#[test]
-		fn prefix_and_suffix_same_length_when_given_odd_length_string_and_even_shrink_length() {
+		fn prefix_smaller_than_suffix_when_given_odd_length_string_and_even_shrink_length() {
 			assert_eq!("112...8990", shrink("1122334455667788990", 10));
 		}
 
