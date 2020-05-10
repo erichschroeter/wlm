@@ -14,6 +14,24 @@ pub mod wm;
 
 pub const MAX_WINDOW_TITLE_LENGTH: usize = 128;
 
+pub fn get_position_string<T: std::fmt::Display>(x: Option<T>, y: Option<T>) -> String {
+	match (x, y) {
+		(Some(x), Some(y)) => format!("({}, {})", x, y),
+		(None, Some(y)) => format!("(null, {})", y),
+		(Some(x), None) => format!("({}, null)", x),
+		_ => "".to_string(),
+	}
+}
+
+pub fn get_dimensions_string<T: std::fmt::Display>(width: Option<T>, height: Option<T>) -> String {
+	match (width, height) {
+		(Some(w), Some(h)) => format!("{} x {}", w, h),
+		(None, Some(h)) => format!("null x {}", h),
+		(Some(w), None) => format!("{} x null", w),
+		_ => "".to_string(),
+	}
+}
+
 pub fn shrink(the_string: &str, shrink_len: usize) -> String {
 	if the_string.chars().count() > shrink_len {
 		let mut shrinked = String::new();
@@ -85,6 +103,44 @@ mod tests {
 			// panicked at 'byte index 9 is not a char boundary; it is inside '’' (bytes 7..10) of `aa‘bb’cc`'
 			let title_with_unicode = "aa‘bb’cc";
 			assert_eq!(title_with_unicode, shrink(title_with_unicode, 8));
+		}
+	}
+
+	mod get_position_string {
+		use super::super::*;
+
+		#[test]
+		fn x_prints_as_null() {
+			assert_eq!("(null, 100)", get_position_string(None, Some(100)));
+		}
+
+		#[test]
+		fn y_prints_as_null() {
+			assert_eq!("(100, null)", get_position_string(Some(100), None));
+		}
+
+		#[test]
+		fn nothing_printed_when_x_and_y_are_null() {
+			assert_eq!("", get_position_string(None as Option<&str>, None));
+		}
+	}
+
+	mod get_dimensions_string {
+		use super::super::*;
+
+		#[test]
+		fn width_prints_as_null() {
+			assert_eq!("null x 100", get_dimensions_string(None, Some(100)));
+		}
+
+		#[test]
+		fn height_prints_as_null() {
+			assert_eq!("100 x null", get_dimensions_string(Some(100), None));
+		}
+
+		#[test]
+		fn nothing_printed_when_w_and_h_are_null() {
+			assert_eq!("", get_dimensions_string(None as Option<&str>, None));
 		}
 	}
 }
