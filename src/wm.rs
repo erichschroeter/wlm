@@ -3,16 +3,10 @@ use crate::{
 	platform,
 };
 
-pub struct WindowManager<'a> {
-	config: Option<&'a Config>,
-}
+pub struct WindowManager;
 
-impl<'a> WindowManager<'a> {
-	pub fn new(config: Option<&'a Config>) -> Self {
-		WindowManager { config }
-	}
-
-	pub fn monitors(&self) -> Vec<platform::Monitor> {
+impl WindowManager {
+	pub fn monitors() -> Vec<platform::Monitor> {
 		platform::list_monitors()
 	}
 
@@ -20,7 +14,7 @@ impl<'a> WindowManager<'a> {
 		platform::list_windows(Some(config))
 	}
 
-	pub fn layout(&self) {
-		platform::layout_windows(self.config)
+	pub fn layout(config: &Config) {
+		platform::layout_windows(Some(config))
 	}
 }

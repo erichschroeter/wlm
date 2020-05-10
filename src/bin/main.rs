@@ -132,7 +132,7 @@ fn main() -> Result<(), ExitFailure> {
 			if let Some(windows) = WindowManager::windows(&Config::new()) {
 				print_windows_tty(&windows);
 			}
-			for m in WindowManager::new(None).monitors() {
+			for m in WindowManager::monitors() {
 				println!("{:?}", m);
 			}
 		}
@@ -305,7 +305,7 @@ fn main() -> Result<(), ExitFailure> {
 		("apply", Some(_matches)) => {
 			let config = Config::load(config_path.to_str().unwrap())
 				.with_context(|_| format!("Loading '{}'", config_path.to_str().unwrap()))?;
-			WindowManager::new(Some(&config)).layout();
+			WindowManager::layout(&config);
 		}
 		_ => {}
 	}
