@@ -3,12 +3,10 @@ use crate::config::{Config, Window};
 use crate::MAX_WINDOW_TITLE_LENGTH;
 
 use std::path::Path;
-use std::ptr;
 use winapi::{
 	shared::{
-		minwindef::{BOOL, DWORD, HINSTANCE, LPARAM, MAX_PATH, TRUE},
+		minwindef::{DWORD, HINSTANCE, LPARAM, MAX_PATH},
 		ntdef::{NULL, WCHAR},
-		windef::{HDC, HMONITOR, LPRECT},
 		windef::{HWND, RECT},
 	},
 	um::{
@@ -18,46 +16,13 @@ use winapi::{
 		psapi::GetModuleFileNameExW,
 		winnt::{HANDLE, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ},
 		winuser::{
-			self, BeginDeferWindowPos, DeferWindowPos, EndDeferWindowPos, EnumWindows,
+			BeginDeferWindowPos, DeferWindowPos, EndDeferWindowPos, EnumWindows,
 			GetWindowLongPtrW, GetWindowRect, GetWindowTextW, GetWindowThreadProcessId,
 			IsWindowVisible, GWL_EXSTYLE, HDWP, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER,
 			SWP_NOSIZE, SWP_NOZORDER, WM_NULL, WS_EX_TOOLWINDOW, WS_EX_WINDOWEDGE,
 		},
 	},
 };
-
-unsafe extern "system" fn monitor_enum_proc(
-	hmonitor: HMONITOR,
-	_hdc: HDC,
-	_place: LPRECT,
-	data: LPARAM,
-) -> BOOL {
-	let monitors = data as *mut Vec<Monitor>;
-	(*monitors).push(Monitor::new(hmonitor));
-	TRUE // continue enumeration
-}
-
-pub fn list_monitors() -> Vec<Monitor> {
-	let mut monitors: Vec<Monitor> = Vec::new();
-	unsafe {
-		winuser::EnumDisplayMonitors(
-			ptr::null_mut(),
-			ptr::null_mut(),
-			Some(monitor_enum_proc),
-			&mut monitors as *mut _ as LPARAM,
-		);
-	}
-	monitors
-}
-
-#[derive(Debug)]
-pub struct Monitor(HMONITOR);
-
-impl Monitor {
-	pub(crate) fn new(hmonitor: HMONITOR) -> Self {
-		Monitor(hmonitor)
-	}
-}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct WindowState {
