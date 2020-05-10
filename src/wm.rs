@@ -1,12 +1,13 @@
 use crate::{
 	config::{Config, Window},
+	monitor::Monitor,
 	platform,
 };
 
 pub struct WindowManager;
 
 impl WindowManager {
-	pub fn monitors() -> Vec<platform::Monitor> {
+	pub fn monitors() -> Vec<Monitor> {
 		platform::list_monitors()
 	}
 

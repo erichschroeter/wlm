@@ -7,6 +7,7 @@ extern crate regex;
 
 pub mod config;
 pub mod error;
+pub mod monitor;
 pub mod platform;
 pub mod window;
 pub mod wm;
