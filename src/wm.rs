@@ -1,5 +1,6 @@
 use crate::{
 	config::{Config, Window},
+	error::Result,
 	monitor::Monitor,
 	platform,
 };
@@ -11,8 +12,8 @@ impl WindowManager {
 		platform::list_monitors()
 	}
 
-	pub fn windows(config: &Config) -> Option<Vec<Window>> {
-		platform::list_windows(Some(config))
+	pub fn windows(config: Option<&Config>) -> Result<Vec<Window>> {
+		platform::list_windows(config)
 	}
 
 	pub fn layout(config: &Config) {

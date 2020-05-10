@@ -129,12 +129,13 @@ fn main() -> Result<(), ExitFailure> {
 		config_path = config_dir.config_dir().join("default.json");
 	}
 	match matches.subcommand() {
-		("ls", Some(_matches)) => {
-			if _matches.is_present("monitors") {
+		("ls", Some(matches)) => {
+			if matches.is_present("monitors") {
 				print_monitors_tty(&WindowManager::monitors());
 			} else {
-				if let Some(windows) = WindowManager::windows(&Config::new()) {
-					print_windows_tty(&windows);
+				match WindowManager::windows(None) {
+					Ok(windows) => print_windows_tty(&windows),
+					Err(_) => {}
 				}
 			}
 		}

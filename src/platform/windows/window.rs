@@ -1,6 +1,9 @@
-use crate::config::{Config, Window};
 #[cfg(windows)]
 use crate::MAX_WINDOW_TITLE_LENGTH;
+use crate::{
+	config::{Config, Window},
+	error::Result,
+};
 
 use std::path::Path;
 use winapi::{
@@ -61,29 +64,30 @@ struct Windows<'a> {
 	list: Vec<WindowState>,
 }
 
-pub fn list_windows<'a>(config: Option<&'a Config>) -> Option<Vec<Window>> {
-	if let Some(list) = list_microsoft_windows(config) {
-		Some(list.into_iter().map(Into::into).collect())
-	} else {
-		None
+pub fn list_windows<'a>(config: Option<&'a Config>) -> Result<Vec<Window>> {
+	match list_microsoft_windows(config) {
+		Ok(list) => Ok(list.into_iter().map(Into::into).collect()),
+		Err(e) => Err(e),
 	}
 }
 
-pub fn list_microsoft_windows<'a>(config: Option<&'a Config>) -> Option<Vec<WindowState>> {
+pub fn list_microsoft_windows<'a>(config: Option<&'a Config>) -> Result<Vec<WindowState>> {
 	let mut windows_state = Windows {
 		config: config,
 		list: Vec::new(),
 	};
 	let struct_ptr = &mut windows_state as *mut Windows;
-	unsafe {
-		EnumWindows(Some(filter_windows_callback), struct_ptr as LPARAM);
+	let status = unsafe { EnumWindows(Some(filter_windows_callback), struct_ptr as LPARAM) };
+	if status == 0 {
+		Err(std::io::Error::last_os_error().into())
+	} else {
+		Ok(windows_state.list)
 	}
-	Some(windows_state.list)
 }
 
 pub fn layout_windows<'a>(config: Option<&'a Config>) {
 	if let Some(config) = config {
-		if let Some(mut windows) = list_microsoft_windows(None) {
+		if let Ok(mut windows) = list_microsoft_windows(None) {
 			apply_config(config, &mut windows);
 		}
 	}
