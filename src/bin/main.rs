@@ -29,11 +29,6 @@ fn main() -> Result<(), ExitFailure> {
 				.about(
 					"Lists active windows and their properies.",
 				)
-				.arg(
-					Arg::with_name("as-json")
-						.help("Change output format of active windows in JSON")
-						.long("as-json"),
-				),
 		)
 		.subcommand(
 			SubCommand::with_name("init")
