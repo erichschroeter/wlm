@@ -3,8 +3,8 @@ use winapi::{
 	shared::{
 		minwindef::{BOOL, LPARAM, TRUE},
 		windef::{HDC, HMONITOR, LPRECT},
-    },
-    um::winuser,
+	},
+	um::winuser,
 };
 
 unsafe extern "system" fn monitor_enum_proc(

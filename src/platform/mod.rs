@@ -3,6 +3,6 @@
 pub mod windows;
 
 #[cfg(windows)]
-pub use windows::window::*;
-#[cfg(windows)]
 pub use windows::monitor::*;
+#[cfg(windows)]
+pub use windows::window::*;

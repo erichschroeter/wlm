@@ -16,10 +16,10 @@ use winapi::{
 		psapi::GetModuleFileNameExW,
 		winnt::{HANDLE, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ},
 		winuser::{
-			BeginDeferWindowPos, DeferWindowPos, EndDeferWindowPos, EnumWindows,
-			GetWindowLongPtrW, GetWindowRect, GetWindowTextW, GetWindowThreadProcessId,
-			IsWindowVisible, GWL_EXSTYLE, HDWP, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER,
-			SWP_NOSIZE, SWP_NOZORDER, WM_NULL, WS_EX_TOOLWINDOW, WS_EX_WINDOWEDGE,
+			BeginDeferWindowPos, DeferWindowPos, EndDeferWindowPos, EnumWindows, GetWindowLongPtrW,
+			GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible, GWL_EXSTYLE,
+			HDWP, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER, WM_NULL,
+			WS_EX_TOOLWINDOW, WS_EX_WINDOWEDGE,
 		},
 	},
 };
