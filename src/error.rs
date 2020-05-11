@@ -4,8 +4,10 @@ pub enum Error {
 	Io { error: std::io::Error },
 	#[fail(display = "Validation error: {}", error)]
 	Validation { error: serde_json::Error },
+	/// A property value is invalid.
 	#[fail(display = "Invalid property")]
 	InvalidProperty,
+	/// An index value is invalid.
 	#[fail(display = "Invalid index")]
 	InvalidIndex,
 }
