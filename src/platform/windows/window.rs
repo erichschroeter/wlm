@@ -1,7 +1,7 @@
 #[cfg(windows)]
 use crate::MAX_WINDOW_TITLE_LENGTH;
 use crate::{
-	config::{Config, Window},
+	config::{Config, Searchable, Window},
 	error::Result,
 };
 
@@ -54,6 +54,22 @@ impl WindowState {
 			y: None,
 			w: None,
 			h: None,
+		}
+	}
+}
+
+impl Searchable for WindowState {
+	fn get_process(&self) -> &str {
+		match &self.process {
+			Some(process) => &process,
+			None => "",
+		}
+	}
+
+	fn get_title(&self) -> &str {
+		match &self.title {
+			Some(title) => &title,
+			None => "",
 		}
 	}
 }

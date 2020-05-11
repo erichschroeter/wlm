@@ -5,7 +5,6 @@ use std::fs::OpenOptions;
 use std::path::PathBuf;
 
 use crate::error::{Error, Result};
-use crate::platform as sys;
 use crate::{get_dimensions_string, get_position_string, shrink};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Builder)]
@@ -40,6 +39,27 @@ impl Window {
 			y: None,
 			w: None,
 			h: None,
+		}
+	}
+}
+
+pub trait Searchable {
+	fn get_title(&self) -> &str;
+	fn get_process(&self) -> &str;
+}
+
+impl Searchable for Window {
+	fn get_process(&self) -> &str {
+		match &self.process {
+			Some(process) => &process,
+			None => "",
+		}
+	}
+
+	fn get_title(&self) -> &str {
+		match &self.title {
+			Some(title) => &title,
+			None => "",
 		}
 	}
 }
@@ -128,21 +148,17 @@ impl Config {
 		Ok(())
 	}
 
-	pub fn search(&self, platform_window: &sys::WindowState) -> Option<Window> {
+	// pub fn search(&self, platform_window: &sys::WindowState) -> Option<Window> {
+	pub fn search<T: Searchable>(&self, searchable: &T) -> Option<Window> {
 		for cfg_window in &self.windows {
 			match (&cfg_window.title, &cfg_window.process) {
 				(Some(cfg_title), Some(cfg_process)) => {
 					match (Regex::new(cfg_title), Regex::new(cfg_process)) {
 						(Ok(title_re), Ok(process_re)) => {
-							match (&platform_window.title, &platform_window.process) {
-								(Some(plat_title), Some(plat_process)) => {
-									if title_re.is_match(plat_title)
-										&& process_re.is_match(plat_process)
-									{
-										return Some(cfg_window.clone());
-									}
-								}
-								_ => {}
+							if title_re.is_match(searchable.get_title())
+								&& process_re.is_match(searchable.get_process())
+							{
+								return Some(cfg_window.clone());
 							}
 						}
 						_ => {}
@@ -150,19 +166,15 @@ impl Config {
 				}
 				(Some(cfg_title), None) => {
 					if let Ok(re) = Regex::new(cfg_title) {
-						if let Some(plat_title) = &platform_window.title {
-							if re.is_match(plat_title) {
-								return Some(cfg_window.clone());
-							}
+						if re.is_match(searchable.get_title()) {
+							return Some(cfg_window.clone());
 						}
 					}
 				}
 				(None, Some(cfg_process)) => {
 					if let Ok(re) = Regex::new(cfg_process) {
-						if let Some(plat_process) = &platform_window.process {
-							if re.is_match(plat_process) {
-								return Some(cfg_window.clone());
-							}
+						if re.is_match(searchable.get_process()) {
+							return Some(cfg_window.clone());
 						}
 					}
 				}
@@ -274,6 +286,7 @@ mod tests {
 
 		mod search {
 			use super::super::super::*;
+			use crate::platform as sys;
 
 			#[test]
 			fn matches_window_given_simple_title_only() {
