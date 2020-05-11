@@ -25,7 +25,7 @@ pub fn monitors() -> Result<Vec<Monitor>> {
 	platform::list_monitors()
 }
 
-/// Returns a list of windows.
+/// Returns a list of visible windows.
 pub fn windows(config: Option<&Config>) -> Result<Vec<Window>> {
 	platform::list_windows(config)
 }

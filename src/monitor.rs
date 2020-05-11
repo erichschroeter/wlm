@@ -1,6 +1,7 @@
 use crate::{get_dimensions_string, get_position_string};
 use prettytable::{color, format, Attr, Cell, Row, Table};
 
+/// Encapsulates the attributes for a display monitor.
 #[derive(Debug, Clone)]
 pub struct Monitor {
 	pub name: String,
@@ -52,6 +53,7 @@ fn get_monitor_table(monitors: &[Monitor]) -> Table {
 	table
 }
 
+/// Prints a list of [Monitor] to any [std::io::Write]able output.
 pub fn print_monitors<T>(monitors: &[Monitor], out: &mut T)
 where
 	T: std::io::Write + ?Sized,
@@ -59,6 +61,7 @@ where
 	let _ = get_monitor_table(monitors).print(out);
 }
 
+/// Prints a list of [Monitor] to [std::io::stdout] (delegated via [prettytable::Table::printstd]).
 pub fn print_monitors_tty(monitors: &[Monitor]) {
 	let _ = get_monitor_table(monitors).printstd();
 }

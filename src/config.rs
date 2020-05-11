@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use crate::error::{Error, Result};
 use crate::{get_dimensions_string, get_position_string, shrink};
 
+/// Encapsulates the attributes for positioning and resizing windows.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Builder)]
 #[builder(setter(into))]
 pub struct Window {
@@ -43,6 +44,7 @@ impl Window {
 	}
 }
 
+/// Provides accessor methods for fields used to search for a [Window] in a [Config].
 pub trait Searchable {
 	fn get_title(&self) -> &str;
 	fn get_process(&self) -> &str;
@@ -96,6 +98,7 @@ fn get_window_table(windows: &[Window]) -> Table {
 	table
 }
 
+/// Prints a list of [Window] to any [std::io::Write]able output.
 pub fn print_windows<T>(windows: &[Window], out: &mut T)
 where
 	T: std::io::Write + ?Sized,
@@ -103,10 +106,12 @@ where
 	let _ = get_window_table(windows).print(out);
 }
 
+/// Prints a list of [Window] to [std::io::stdout] (delegated via [prettytable::Table::printstd]).
 pub fn print_windows_tty(windows: &[Window]) {
 	let _ = get_window_table(windows).printstd();
 }
 
+/// Encapsulates a set of [Window] and how to reposition and resize them.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Builder)]
 #[builder(setter(into))]
 pub struct Config {
