@@ -14,7 +14,7 @@ pub mod wm;
 
 pub const MAX_WINDOW_TITLE_LENGTH: usize = 128;
 
-pub fn get_position_string<T: std::fmt::Display>(x: Option<T>, y: Option<T>) -> String {
+pub(crate) fn get_position_string<T: std::fmt::Display>(x: Option<T>, y: Option<T>) -> String {
 	match (x, y) {
 		(Some(x), Some(y)) => format!("({}, {})", x, y),
 		(None, Some(y)) => format!("(null, {})", y),
@@ -23,7 +23,10 @@ pub fn get_position_string<T: std::fmt::Display>(x: Option<T>, y: Option<T>) -> 
 	}
 }
 
-pub fn get_dimensions_string<T: std::fmt::Display>(width: Option<T>, height: Option<T>) -> String {
+pub(crate) fn get_dimensions_string<T: std::fmt::Display>(
+	width: Option<T>,
+	height: Option<T>,
+) -> String {
 	match (width, height) {
 		(Some(w), Some(h)) => format!("{} x {}", w, h),
 		(None, Some(h)) => format!("null x {}", h),
@@ -32,7 +35,7 @@ pub fn get_dimensions_string<T: std::fmt::Display>(width: Option<T>, height: Opt
 	}
 }
 
-pub fn shrink(the_string: &str, shrink_len: usize) -> String {
+pub(crate) fn shrink(the_string: &str, shrink_len: usize) -> String {
 	if the_string.chars().count() > shrink_len {
 		let mut shrinked = String::new();
 		if shrink_len % 2 == 0 {
