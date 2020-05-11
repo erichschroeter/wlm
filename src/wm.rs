@@ -8,7 +8,7 @@ use crate::{
 pub struct WindowManager;
 
 impl WindowManager {
-	pub fn monitors() -> Vec<Monitor> {
+	pub fn monitors() -> Result<Vec<Monitor>> {
 		platform::list_monitors()
 	}
 

@@ -1,4 +1,5 @@
 use crate::{
+	error::Result,
 	monitor::Monitor,
 	platform::windows::{get_dimensions, get_position},
 };
@@ -41,20 +42,24 @@ unsafe extern "system" fn monitor_enum_proc(
 	TRUE // continue enumeration
 }
 
-pub fn list_monitors() -> Vec<Monitor> {
+pub fn list_monitors() -> Result<Vec<Monitor>> {
 	let mut monitors: Vec<Monitor> = Vec::new();
-	unsafe {
+	let status = unsafe {
 		winuser::EnumDisplayMonitors(
 			ptr::null_mut(),
 			ptr::null_mut(),
 			Some(monitor_enum_proc),
 			&mut monitors as *mut _ as LPARAM,
-		);
+		)
+	};
+	if status == 0 {
+		Err(io::Error::last_os_error().into())
+	} else {
+		Ok(monitors)
 	}
-	monitors
 }
 
-fn get_monitor_info_ex(handle: MonitorHandle) -> Result<winuser::MONITORINFOEXW, io::Error> {
+fn get_monitor_info_ex(handle: MonitorHandle) -> Result<winuser::MONITORINFOEXW> {
 	let mut monitor_info: MONITORINFOEXW = unsafe { mem::zeroed() };
 	monitor_info.cbSize = mem::size_of::<MONITORINFOEXW>() as DWORD;
 	let status = unsafe {
@@ -64,7 +69,7 @@ fn get_monitor_info_ex(handle: MonitorHandle) -> Result<winuser::MONITORINFOEXW,
 		)
 	};
 	if status == 0 {
-		Err(io::Error::last_os_error())
+		Err(io::Error::last_os_error().into())
 	} else {
 		Ok(monitor_info)
 	}

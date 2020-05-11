@@ -131,7 +131,10 @@ fn main() -> Result<(), ExitFailure> {
 	match matches.subcommand() {
 		("ls", Some(matches)) => {
 			if matches.is_present("monitors") {
-				print_monitors_tty(&WindowManager::monitors());
+				match WindowManager::monitors() {
+					Ok(monitors) => print_monitors_tty(&monitors),
+					Err(_) => {}
+				}
 			} else {
 				match WindowManager::windows(None) {
 					Ok(windows) => print_windows_tty(&windows),
