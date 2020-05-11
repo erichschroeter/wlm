@@ -9,8 +9,9 @@ use std::env;
 use std::path::Path;
 use window_layout_manager::{
 	config::{print_windows_tty, Config, WindowBuilder},
+	layout,
 	monitor::print_monitors_tty,
-	wm::WindowManager,
+	monitors, windows,
 };
 
 fn main() -> Result<(), ExitFailure> {
@@ -131,12 +132,12 @@ fn main() -> Result<(), ExitFailure> {
 	match matches.subcommand() {
 		("ls", Some(matches)) => {
 			if matches.is_present("monitors") {
-				match WindowManager::monitors() {
+				match monitors() {
 					Ok(monitors) => print_monitors_tty(&monitors),
 					Err(_) => {}
 				}
 			} else {
-				match WindowManager::windows(None) {
+				match windows(None) {
 					Ok(windows) => print_windows_tty(&windows),
 					Err(_) => {}
 				}
@@ -311,7 +312,7 @@ fn main() -> Result<(), ExitFailure> {
 		("apply", Some(_matches)) => {
 			let config = Config::load(config_path.to_str().unwrap())
 				.with_context(|_| format!("Loading '{}'", config_path.to_str().unwrap()))?;
-			WindowManager::layout(&config);
+			layout(&config);
 		}
 		_ => {}
 	}

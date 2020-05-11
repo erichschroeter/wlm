@@ -10,9 +10,30 @@ pub mod error;
 pub mod monitor;
 pub mod platform;
 pub mod window;
-pub mod wm;
 
+use crate::{
+	config::{Config, Window},
+	error::Result,
+	monitor::Monitor,
+};
+
+/// Maximum supported length for a window title.
 pub const MAX_WINDOW_TITLE_LENGTH: usize = 128;
+
+/// Returns a list of available monitors.
+pub fn monitors() -> Result<Vec<Monitor>> {
+	platform::list_monitors()
+}
+
+/// Returns a list of windows.
+pub fn windows(config: Option<&Config>) -> Result<Vec<Window>> {
+	platform::list_windows(config)
+}
+
+/// Repositions and resizes displayable windows based on the given config.
+pub fn layout(config: &Config) {
+	platform::layout_windows(Some(config))
+}
 
 pub(crate) fn get_position_string<T: std::fmt::Display>(x: Option<T>, y: Option<T>) -> String {
 	match (x, y) {
