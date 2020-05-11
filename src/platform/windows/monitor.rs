@@ -1,7 +1,7 @@
 use crate::{
-	error::Result,
 	monitor::Monitor,
 	platform::windows::{get_dimensions, get_position},
+	Result,
 };
 use std::{io, mem, ptr};
 use winapi::{

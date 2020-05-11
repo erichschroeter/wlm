@@ -13,9 +13,11 @@ pub mod window;
 
 use crate::{
 	config::{Config, Window},
-	error::Result,
+	error::Error,
 	monitor::Monitor,
 };
+
+pub type Result<T> = std::result::Result<T, Error>;
 
 /// Maximum supported length for a window title.
 pub const MAX_WINDOW_TITLE_LENGTH: usize = 128;

@@ -1,5 +1,3 @@
-pub type Result<T> = std::result::Result<T, Error>;
-
 #[derive(Fail, Debug)]
 pub enum Error {
 	#[fail(display = "IO error: {}", error)]

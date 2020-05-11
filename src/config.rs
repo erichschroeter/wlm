@@ -4,8 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::fs::OpenOptions;
 use std::path::PathBuf;
 
-use crate::error::{Error, Result};
-use crate::{get_dimensions_string, get_position_string, shrink};
+use crate::{error::Error, get_dimensions_string, get_position_string, shrink, Result};
 
 /// Encapsulates the attributes for positioning and resizing windows.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Builder)]

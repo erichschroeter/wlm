@@ -2,7 +2,7 @@
 use crate::MAX_WINDOW_TITLE_LENGTH;
 use crate::{
 	config::{Config, Searchable, Window},
-	error::Result,
+	Result,
 };
 
 use std::path::Path;
