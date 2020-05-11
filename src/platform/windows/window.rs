@@ -71,7 +71,7 @@ pub fn list_windows<'a>(config: Option<&'a Config>) -> Result<Vec<Window>> {
 	}
 }
 
-pub fn list_microsoft_windows<'a>(config: Option<&'a Config>) -> Result<Vec<WindowState>> {
+fn list_microsoft_windows<'a>(config: Option<&'a Config>) -> Result<Vec<WindowState>> {
 	let mut windows_state = Windows {
 		config: config,
 		list: Vec::new(),
@@ -240,12 +240,12 @@ fn is_invisible_win10_background_app_window(hwnd: HWND) -> bool {
 	}
 }
 
-pub struct Position {
+struct Position {
 	pub x: i32,
 	pub y: i32,
 }
 
-pub struct Dimensions {
+struct Dimensions {
 	pub width: i32,
 	pub height: i32,
 }

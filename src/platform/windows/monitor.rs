@@ -13,7 +13,7 @@ use winapi::{
 };
 
 #[derive(Debug)]
-pub struct MonitorHandle(HMONITOR);
+struct MonitorHandle(HMONITOR);
 
 impl From<MonitorHandle> for Monitor {
 	fn from(hmonitor: MonitorHandle) -> Self {
