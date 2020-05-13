@@ -282,6 +282,14 @@ fn main() -> Result<(), ExitFailure> {
 								println!("{}", title);
 							}
 						}
+						"process" => {
+							if matches.is_present("reset") {
+								window.process = None;
+								config.save(config_path.to_str().unwrap())?;
+							} else if let Some(process) = &window.process {
+								println!("{}", process);
+							}
+						}
 						_ => {}
 					}
 				}
