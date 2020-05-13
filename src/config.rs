@@ -195,11 +195,7 @@ impl Config {
 
 	/// Returns a tuple of the index and property string.
 	/// 
-	/// Given the following example:
-	/// 
-	///     windows.0.title
-	/// 
-	/// the returned value is (0, "title").
+	/// e.g. Given "windows.0.title", the returned value is (0, "title").
 	pub fn parse_property_string(the_string: &str) -> Result<(usize, String)> {
 		let tokens: Vec<&str> = the_string.split(".").collect();
 		match tokens.len() {
@@ -442,8 +438,8 @@ mod tests {
 			fn windows_0_doesnotexist() {
 				assert!(Config::parse_property_string("windows.0.doesnotexist").is_err());
 				assert_eq!(
-					Error::InvalidProperty,
-					Config::parse_property_string("windows.0.doesnotexist").unwrap_err()
+					"Invalid property",
+					Config::parse_property_string("windows.0.doesnotexist").unwrap_err().to_string()
 				);
 			}
 
