@@ -201,6 +201,64 @@ mod set {
 	}
 
 	#[test]
+	fn title() {
+		let temp_dir = assert_fs::TempDir::new().unwrap();
+		let config_file = temp_dir.child("test.json");
+		config_file.write_str(r#"{"windows": [{}]}"#).unwrap();
+		let mut cmd = Command::cargo_bin(env!("CARGO_PKG_NAME")).unwrap();
+		let _output = cmd
+			.args(&[
+				"-f",
+				config_file.path().to_str().unwrap(),
+				"config",
+				"windows.0.title",
+				"example title",
+			])
+			.output()
+			.expect("failed to get command output");
+		cmd.assert().success();
+		config_file.assert(
+			r#"{
+  "windows": [
+    {
+      "title": "example title"
+    }
+  ]
+}"#,
+		);
+		temp_dir.close().unwrap();
+	}
+
+	#[test]
+	fn process() {
+		let temp_dir = assert_fs::TempDir::new().unwrap();
+		let config_file = temp_dir.child("test.json");
+		config_file.write_str(r#"{"windows": [{}]}"#).unwrap();
+		let mut cmd = Command::cargo_bin(env!("CARGO_PKG_NAME")).unwrap();
+		let _output = cmd
+			.args(&[
+				"-f",
+				config_file.path().to_str().unwrap(),
+				"config",
+				"windows.0.process",
+				"process.exe",
+			])
+			.output()
+			.expect("failed to get command output");
+		cmd.assert().success();
+		config_file.assert(
+			r#"{
+  "windows": [
+    {
+      "process": "process.exe"
+    }
+  ]
+}"#,
+		);
+		temp_dir.close().unwrap();
+	}
+
+	#[test]
 	fn x() {
 		let temp_dir = assert_fs::TempDir::new().unwrap();
 		let config_file = temp_dir.child("test.json");

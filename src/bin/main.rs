@@ -229,6 +229,14 @@ fn main() -> Result<(), ExitFailure> {
 							window.h = Some(h);
 							config.save(config_path.to_str().unwrap())?;
 						}
+						"title" => {
+							window.title = Some(value.to_string());
+							config.save(config_path.to_str().unwrap())?;
+						}
+						"process" => {
+							window.process = Some(value.to_string());
+							config.save(config_path.to_str().unwrap())?;
+						}
 						_ => {}
 					}
 				}
