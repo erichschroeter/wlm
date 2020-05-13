@@ -342,6 +342,29 @@ mod get {
 	}
 
 	#[test]
+	fn title() {
+		let temp_dir = assert_fs::TempDir::new().unwrap();
+		let config_file = temp_dir.child("test.json");
+		config_file
+			.write_str(r#"{"windows": [{"title": "example title"}]}"#)
+			.unwrap();
+		let mut cmd = Command::cargo_bin(env!("CARGO_PKG_NAME")).unwrap();
+		let output = cmd
+			.args(&[
+				"-f",
+				config_file.path().to_str().unwrap(),
+				"config",
+				"windows.0.title",
+			])
+			.output()
+			.expect("failed to get command output");
+		cmd.assert().success();
+		let stdout = String::from_utf8(output.stdout).unwrap();
+		assert_eq!("example title\n", stdout);
+		temp_dir.close().unwrap();
+	}
+
+	#[test]
 	fn x() {
 		let temp_dir = assert_fs::TempDir::new().unwrap();
 		let config_file = temp_dir.child("test.json");

@@ -274,6 +274,14 @@ fn main() -> Result<(), ExitFailure> {
 								println!("{}", h);
 							}
 						}
+						"title" => {
+							if matches.is_present("reset") {
+								window.title = None;
+								config.save(config_path.to_str().unwrap())?;
+							} else if let Some(title) = &window.title {
+								println!("{}", title);
+							}
+						}
 						_ => {}
 					}
 				}

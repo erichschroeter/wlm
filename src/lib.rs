@@ -4,6 +4,8 @@ extern crate failure;
 #[macro_use]
 extern crate failure_derive;
 extern crate regex;
+#[macro_use]
+extern crate reflection_derive;
 
 pub mod config;
 pub mod error;

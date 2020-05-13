@@ -3,11 +3,16 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::fs::OpenOptions;
 use std::path::PathBuf;
+use reflection::Reflection;
 
 use crate::{error::Error, get_dimensions_string, get_position_string, shrink, Result};
 
+pub trait Properties {
+	fn properties(&self) -> [String];
+}
+
 /// Encapsulates the attributes for positioning and resizing windows.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Builder)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Builder, Reflection)]
 #[builder(setter(into))]
 pub struct Window {
 	#[builder(default)]
@@ -188,15 +193,26 @@ impl Config {
 		None
 	}
 
+	/// Returns a tuple of the index and property string.
+	/// 
+	/// Given the following example:
+	/// 
+	///     windows.0.title
+	/// 
+	/// the returned value is (0, "title").
 	pub fn parse_property_string(the_string: &str) -> Result<(usize, String)> {
 		let tokens: Vec<&str> = the_string.split(".").collect();
 		match tokens.len() {
 			3 => match tokens[0] {
 				"windows" => {
 					if let Ok(index) = tokens[1].parse::<usize>() {
-						match tokens[2] {
-							"x" | "y" | "w" | "h" => return Ok((index, tokens[2].to_string())),
-							_ => {}
+						for child in Window::schemata().root() {
+							// Use the reflection crate to check for property.
+							for member in child.iter() {
+								if member.data.id() == tokens[2].to_string() {
+									return Ok((index, tokens[2].to_string()));
+								}
+							}
 						}
 					} else {
 						return Err(Error::InvalidIndex);
@@ -423,10 +439,59 @@ mod tests {
 			use super::super::super::*;
 
 			#[test]
+			fn windows_0_doesnotexist() {
+				assert!(Config::parse_property_string("windows.0.doesnotexist").is_err());
+				assert_eq!(
+					Error::InvalidProperty,
+					Config::parse_property_string("windows.0.doesnotexist").unwrap_err()
+				);
+			}
+
+			#[test]
 			fn windows_0_x() {
 				assert_eq!(
 					(0, "x".to_string()),
 					Config::parse_property_string("windows.0.x").unwrap()
+				);
+			}
+
+			#[test]
+			fn windows_0_y() {
+				assert_eq!(
+					(0, "y".to_string()),
+					Config::parse_property_string("windows.0.y").unwrap()
+				);
+			}
+
+			#[test]
+			fn windows_0_w() {
+				assert_eq!(
+					(0, "w".to_string()),
+					Config::parse_property_string("windows.0.w").unwrap()
+				);
+			}
+
+			#[test]
+			fn windows_0_h() {
+				assert_eq!(
+					(0, "h".to_string()),
+					Config::parse_property_string("windows.0.h").unwrap()
+				);
+			}
+
+			#[test]
+			fn windows_0_title() {
+				assert_eq!(
+					(0, "title".to_string()),
+					Config::parse_property_string("windows.0.title").unwrap()
+				);
+			}
+
+			#[test]
+			fn windows_0_process() {
+				assert_eq!(
+					(0, "process".to_string()),
+					Config::parse_property_string("windows.0.process").unwrap()
 				);
 			}
 		}
