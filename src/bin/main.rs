@@ -213,7 +213,7 @@ fn main() -> Result<(), ExitFailure> {
 						println!("{}", value);
 					}
 				}
-				None => print_windows_tty(&config.windows)
+				None => print_windows_tty(&config.windows),
 			}
 		}
 		("add", Some(matches)) => {
