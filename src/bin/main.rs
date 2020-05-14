@@ -198,112 +198,22 @@ fn main() -> Result<(), ExitFailure> {
 		("config", Some(matches)) => {
 			let mut config = Config::load(config_path.to_str().unwrap())
 				.with_context(|_| format!("Loading '{}'", config_path.to_str().unwrap()))?;
-			match (matches.value_of("config-option"), matches.value_of("value")) {
-				(Some(config_option), Some(value)) => {
+			match matches.value_of("config-option") {
+				Some(config_option) => {
 					let prop = Config::parse_property_string(config_option)
 						.with_context(|_| format!("Unsupported property '{}'", config_option))?;
-					let window_count = config.windows.len();
-					let mut window = config.window_at(prop.0).context(match window_count {
-						1 => format!("Valid index is 0"),
-						0 => format!("No windows exist"),
-						_ => format!("Valid index range is 0 to {}", window_count - 1),
-					})?;
-					match prop.1.as_str() {
-						"x" => {
-							let x = value.parse::<i32>()?;
-							window.x = Some(x);
-							config.save(config_path.to_str().unwrap())?;
-						}
-						"y" => {
-							let y = value.parse::<i32>()?;
-							window.y = Some(y);
-							config.save(config_path.to_str().unwrap())?;
-						}
-						"w" => {
-							let w = value.parse::<i32>()?;
-							window.w = Some(w);
-							config.save(config_path.to_str().unwrap())?;
-						}
-						"h" => {
-							let h = value.parse::<i32>()?;
-							window.h = Some(h);
-							config.save(config_path.to_str().unwrap())?;
-						}
-						"title" => {
-							window.title = Some(value.to_string());
-							config.save(config_path.to_str().unwrap())?;
-						}
-						"process" => {
-							window.process = Some(value.to_string());
-							config.save(config_path.to_str().unwrap())?;
-						}
-						_ => {}
+					if matches.is_present("reset") {
+						config.set_property(prop.0, &prop.1, None)?;
+						config.save(config_path.to_str().unwrap())?;
+					} else if let Some(value) = matches.value_of("value") {
+						config.set_property(prop.0, &prop.1, Some(value))?;
+						config.save(config_path.to_str().unwrap())?;
+					} else {
+						let value = config.get_property(prop.0, &prop.1)?;
+						println!("{}", value);
 					}
 				}
-				(Some(config_option), None) => {
-					let prop = Config::parse_property_string(config_option)
-						.with_context(|_| format!("Unsupported property '{}'", config_option))?;
-					let window_count = config.windows.len();
-					let mut window = config.window_at(prop.0).context(match window_count {
-						1 => format!("Valid index is 0"),
-						0 => format!("No windows exist"),
-						_ => format!("Valid index range is 0 to {}", window_count - 1),
-					})?;
-					match prop.1.as_str() {
-						"x" => {
-							if matches.is_present("reset") {
-								window.x = None;
-								config.save(config_path.to_str().unwrap())?;
-							} else if let Some(x) = window.x {
-								println!("{}", x);
-							}
-						}
-						"y" => {
-							if matches.is_present("reset") {
-								window.y = None;
-								config.save(config_path.to_str().unwrap())?;
-							} else if let Some(y) = window.y {
-								println!("{}", y);
-							}
-						}
-						"w" => {
-							if matches.is_present("reset") {
-								window.w = None;
-								config.save(config_path.to_str().unwrap())?;
-							} else if let Some(w) = window.w {
-								println!("{}", w);
-							}
-						}
-						"h" => {
-							if matches.is_present("reset") {
-								window.h = None;
-								config.save(config_path.to_str().unwrap())?;
-							} else if let Some(h) = window.h {
-								println!("{}", h);
-							}
-						}
-						"title" => {
-							if matches.is_present("reset") {
-								window.title = None;
-								config.save(config_path.to_str().unwrap())?;
-							} else if let Some(title) = &window.title {
-								println!("{}", title);
-							}
-						}
-						"process" => {
-							if matches.is_present("reset") {
-								window.process = None;
-								config.save(config_path.to_str().unwrap())?;
-							} else if let Some(process) = &window.process {
-								println!("{}", process);
-							}
-						}
-						_ => {}
-					}
-				}
-				_ => {
-					print_windows_tty(&config.windows);
-				}
+				None => print_windows_tty(&config.windows)
 			}
 		}
 		("add", Some(matches)) => {

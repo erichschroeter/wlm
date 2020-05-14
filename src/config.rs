@@ -221,7 +221,77 @@ impl Config {
 		Err(Error::InvalidProperty)
 	}
 
-	pub fn window_at(&mut self, index: usize) -> Result<&mut Window> {
+	pub fn get_property(&self, index: usize, property: &str) -> Result<String> {
+		let window = &self.window_at(index)?;
+		match property {
+			"x" => match window.x {
+				Some(value) => Ok(value.to_string()),
+				None => Ok("".to_string())
+			}
+			"y" => match window.y {
+				Some(value) => Ok(value.to_string()),
+				None => Ok("".to_string())
+			}
+			"w" => match window.w {
+				Some(value) => Ok(value.to_string()),
+				None => Ok("".to_string())
+			}
+			"h" => match window.h {
+				Some(value) => Ok(value.to_string()),
+				None => Ok("".to_string())
+			}
+			"title" => match &window.title {
+				Some(value) => Ok(value.to_string()),
+				None => Ok("".to_string())
+			}
+			"process" => match &window.process {
+				Some(value) => Ok(value.to_string()),
+				None => Ok("".to_string())
+			}
+			_ => Err(Error::InvalidProperty),
+		}
+	}
+
+	pub fn set_property(&mut self, index: usize, property: &str, value: Option<&str>) -> Result<()> {
+		let window = self.window_at_mut(index)?;
+		match property {
+			"x" => match value {
+				Some(value) => window.x = Some(value.parse::<i32>()?),
+				None => window.x = None
+			}
+			"y" => match value {
+				Some(value) => window.y = Some(value.parse::<i32>()?),
+				None => window.y = None
+			}
+			"w" => match value {
+				Some(value) => window.w = Some(value.parse::<i32>()?),
+				None => window.w = None
+			}
+			"h" => match value {
+				Some(value) => window.h = Some(value.parse::<i32>()?),
+				None => window.h = None
+			}
+			"title" => match value {
+				Some(value) => window.title = Some(value.to_string()),
+				None => window.title = None
+			}
+			"process" => match value {
+				Some(value) => window.process = Some(value.to_string()),
+				None => window.process = None
+			}
+			_ => return Err(Error::InvalidProperty),
+		}
+		Ok(())
+	}
+
+	pub fn window_at(&self, index: usize) -> Result<&Window> {
+		match self.windows.get(index) {
+			Some(window) => Ok(window),
+			None => Err(Error::InvalidIndex),
+		}
+	}
+
+	pub fn window_at_mut(&mut self, index: usize) -> Result<&mut Window> {
 		match self.windows.get_mut(index) {
 			Some(window) => Ok(window),
 			None => Err(Error::InvalidIndex),
@@ -415,17 +485,16 @@ mod tests {
 
 			#[test]
 			fn gets_first() {
-				let mut config = ConfigBuilder::default()
+				let config = ConfigBuilder::default()
 					.windows(vec![WindowBuilder::default().build().unwrap()])
-					.build()
-					.unwrap();
+					.build().unwrap();
 				let window = config.window_at(0);
 				assert!(window.is_ok());
 			}
 
 			#[test]
 			fn error_if_out_of_bounds() {
-				let mut config = ConfigBuilder::default().windows(vec![]).build().unwrap();
+				let config = ConfigBuilder::default().windows(vec![]).build().unwrap();
 				let window = config.window_at(0);
 				assert!(window.is_err());
 			}
@@ -489,6 +558,117 @@ mod tests {
 					(0, "process".to_string()),
 					Config::parse_property_string("windows.0.process").unwrap()
 				);
+			}
+		}
+
+		mod get_property {
+			use super::super::super::*;
+
+			#[test]
+			fn error_if_index_invalid() {
+				let config = ConfigBuilder::default()
+					.windows(vec![WindowBuilder::default().build().unwrap()])
+					.build().unwrap();
+				let property = config.get_property(1, "x");
+				assert!(property.is_err());
+				assert_eq!("Invalid index", property.unwrap_err().to_string());
+			}
+
+			#[test]
+			fn error_if_property_does_not_exist() {
+				let config = ConfigBuilder::default()
+					.windows(vec![WindowBuilder::default().build().unwrap()])
+					.build().unwrap();
+				let property = config.get_property(0, "doesnotexist");
+				assert!(property.is_err());
+				assert_eq!("Invalid property", property.unwrap_err().to_string());
+			}
+
+			#[test]
+			fn x() {
+				let config = ConfigBuilder::default()
+					.windows(vec![WindowBuilder::default().x(100).build().unwrap()])
+					.build().unwrap();
+				let property = config.get_property(0, "x");
+				assert_eq!("100", property.unwrap());
+			}
+
+			#[test]
+			fn y() {
+				let config = ConfigBuilder::default()
+					.windows(vec![WindowBuilder::default().y(100).build().unwrap()])
+					.build().unwrap();
+				let property = config.get_property(0, "y");
+				assert_eq!("100", property.unwrap());
+			}
+
+			#[test]
+			fn w() {
+				let config = ConfigBuilder::default()
+					.windows(vec![WindowBuilder::default().w(100).build().unwrap()])
+					.build().unwrap();
+				let property = config.get_property(0, "w");
+				assert_eq!("100", property.unwrap());
+			}
+
+			#[test]
+			fn h() {
+				let config = ConfigBuilder::default()
+					.windows(vec![WindowBuilder::default().h(100).build().unwrap()])
+					.build().unwrap();
+				let property = config.get_property(0, "h");
+				assert_eq!("100", property.unwrap());
+			}
+
+			#[test]
+			fn title() {
+				let config = ConfigBuilder::default()
+					.windows(vec![WindowBuilder::default().title("example title".to_string()).build().unwrap()])
+					.build().unwrap();
+				let property = config.get_property(0, "title");
+				assert_eq!("example title", property.unwrap());
+			}
+
+			#[test]
+			fn process() {
+				let config = ConfigBuilder::default()
+					.windows(vec![WindowBuilder::default().process("process.exe".to_string()).build().unwrap()])
+					.build().unwrap();
+				let property = config.get_property(0, "process");
+				assert_eq!("process.exe", property.unwrap());
+			}
+		}
+
+		mod set_property {
+			use super::super::super::*;
+
+			#[test]
+			fn error_if_index_invalid() {
+				let mut config = ConfigBuilder::default()
+					.windows(vec![WindowBuilder::default().build().unwrap()])
+					.build().unwrap();
+				let property = config.set_property(1, "x", None);
+				assert!(property.is_err());
+				assert_eq!("Invalid index", property.unwrap_err().to_string());
+			}
+
+			#[test]
+			fn error_if_property_does_not_exist() {
+				let mut config = ConfigBuilder::default()
+					.windows(vec![WindowBuilder::default().build().unwrap()])
+					.build().unwrap();
+				let property = config.set_property(0, "doesnotexist", None);
+				assert!(property.is_err());
+				assert_eq!("Invalid property", property.unwrap_err().to_string());
+			}
+
+			#[test]
+			fn x() {
+				let mut config = ConfigBuilder::default()
+					.windows(vec![WindowBuilder::default().x(100).build().unwrap()])
+					.build().unwrap();
+				let property = config.set_property(0, "x", None);
+				assert!(property.is_ok());
 			}
 		}
 	}

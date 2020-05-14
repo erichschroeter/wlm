@@ -120,7 +120,7 @@ mod set {
 			.expect("failed to get command output");
 		cmd.assert().failure();
 		let stderr = String::from_utf8(output.stderr).unwrap();
-		assert!(stderr.contains("caused by Invalid index"));
+		assert!(stderr.contains("Invalid index"));
 		temp_dir.close().unwrap();
 	}
 
@@ -395,7 +395,7 @@ mod get {
 			.output()
 			.expect("failed to get command output");
 		let stderr = String::from_utf8(output.stderr).unwrap();
-		assert!(stderr.contains("caused by Invalid index"));
+		assert!(stderr.contains("Invalid index"));
 		temp_dir.close().unwrap();
 	}
 
