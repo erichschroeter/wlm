@@ -150,7 +150,9 @@ fn main() -> Result<(), ExitFailure> {
 						let config_path = config_path.join("default.json");
 						Config::default()
 							.save(config_path.to_str().unwrap())
-							.with_context(|_| format!("Saving '{}'", config_path.to_str().unwrap()))?;
+							.with_context(|_| {
+								format!("Saving '{}'", config_path.to_str().unwrap())
+							})?;
 					}
 				} else {
 					if config_path.extension().is_some() {
@@ -159,13 +161,17 @@ fn main() -> Result<(), ExitFailure> {
 						}
 						Config::default()
 							.save(config_path.to_str().unwrap())
-							.with_context(|_| format!("Saving '{}'", config_path.to_str().unwrap()))?;
+							.with_context(|_| {
+								format!("Saving '{}'", config_path.to_str().unwrap())
+							})?;
 					} else {
 						std::fs::create_dir_all(&config_path)?;
 						let config_path = config_path.join("default.json");
 						Config::default()
 							.save(config_path.to_str().unwrap())
-							.with_context(|_| format!("Saving '{}'", config_path.to_str().unwrap()))?;
+							.with_context(|_| {
+								format!("Saving '{}'", config_path.to_str().unwrap())
+							})?;
 					}
 				}
 			}
