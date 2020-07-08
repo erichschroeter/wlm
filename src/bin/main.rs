@@ -85,12 +85,14 @@ fn main() -> Result<(), ExitFailure> {
 						.short("x")
 						.help("Set the x value")
 						.takes_value(true)
+						.allow_hyphen_values(true)
 				)
 				.arg(
 					Arg::with_name("y")
 						.short("y")
 						.help("Set the y value")
 						.takes_value(true)
+						.allow_hyphen_values(true)
 				)
 				.arg(
 					Arg::with_name("w")
@@ -98,6 +100,7 @@ fn main() -> Result<(), ExitFailure> {
 						.long("width")
 						.help("Set the w value")
 						.takes_value(true)
+						.allow_hyphen_values(true)
 				)
 				.arg(
 					Arg::with_name("h")
@@ -105,6 +108,7 @@ fn main() -> Result<(), ExitFailure> {
 						.long("height")
 						.help("Set the height value")
 						.takes_value(true)
+						.allow_hyphen_values(true)
 				)
 		)
 		.subcommand(
