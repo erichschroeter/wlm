@@ -132,18 +132,47 @@ fn main() -> Result<(), ExitFailure> {
 						format!("Saving with --force '{}'", config_path.to_str().unwrap())
 					})?;
 			} else {
-				if config_path.is_file() {
-					let error = Err(failure::err_msg(
-						"Use --force if the intent is to overwrite",
-					));
-					return Err(error.context(format!(
-						"Config already exists: {}",
-						config_path.to_str().unwrap()
-					))?);
+				// File & e   : create if and only --force
+				// Dir  & e   : create default.json
+				// File & dne : create
+				// Dir  & dne : create default.json
+				if config_path.exists() {
+					if config_path.is_file() {
+						let error = Err(failure::err_msg(
+							"Use --force if the intent is to overwrite",
+						));
+						return Err(error.context(format!(
+							"Config already exists: {}",
+							config_path.to_str().unwrap()
+						))?);
+					} else {
+						std::fs::create_dir_all(&config_path)?;
+						let config_path = config_path.join("default.json");
+						Config::default()
+							.save(config_path.to_str().unwrap())
+							.with_context(|_| {
+								format!("Saving '{}'", config_path.to_str().unwrap())
+							})?;
+					}
 				} else {
-					Config::default()
-						.save(config_path.to_str().unwrap())
-						.with_context(|_| format!("Saving '{}'", config_path.to_str().unwrap()))?;
+					if config_path.extension().is_some() {
+						if let Some(dir) = config_path.parent() {
+							std::fs::create_dir_all(dir)?;
+						}
+						Config::default()
+							.save(config_path.to_str().unwrap())
+							.with_context(|_| {
+								format!("Saving '{}'", config_path.to_str().unwrap())
+							})?;
+					} else {
+						std::fs::create_dir_all(&config_path)?;
+						let config_path = config_path.join("default.json");
+						Config::default()
+							.save(config_path.to_str().unwrap())
+							.with_context(|_| {
+								format!("Saving '{}'", config_path.to_str().unwrap())
+							})?;
+					}
 				}
 			}
 		}
