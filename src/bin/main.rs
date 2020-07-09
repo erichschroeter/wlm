@@ -11,7 +11,7 @@ use window_layout_manager::{Config, WindowBuilder, WindowManager};
 
 fn main() -> Result<(), ExitFailure> {
 	let matches = App::new("wlm")
-		.version("0.2.0")
+		.version("0.3.0")
 		.about("Move and resize windows.")
 		.arg(
 			Arg::with_name("file")
@@ -85,12 +85,14 @@ fn main() -> Result<(), ExitFailure> {
 						.short("x")
 						.help("Set the x value")
 						.takes_value(true)
+						.allow_hyphen_values(true)
 				)
 				.arg(
 					Arg::with_name("y")
 						.short("y")
 						.help("Set the y value")
 						.takes_value(true)
+						.allow_hyphen_values(true)
 				)
 				.arg(
 					Arg::with_name("w")
@@ -98,6 +100,7 @@ fn main() -> Result<(), ExitFailure> {
 						.long("width")
 						.help("Set the w value")
 						.takes_value(true)
+						.allow_hyphen_values(true)
 				)
 				.arg(
 					Arg::with_name("h")
@@ -105,6 +108,7 @@ fn main() -> Result<(), ExitFailure> {
 						.long("height")
 						.help("Set the height value")
 						.takes_value(true)
+						.allow_hyphen_values(true)
 				)
 		)
 		.subcommand(
@@ -132,18 +136,47 @@ fn main() -> Result<(), ExitFailure> {
 						format!("Saving with --force '{}'", config_path.to_str().unwrap())
 					})?;
 			} else {
-				if config_path.is_file() {
-					let error = Err(failure::err_msg(
-						"Use --force if the intent is to overwrite",
-					));
-					return Err(error.context(format!(
-						"Config already exists: {}",
-						config_path.to_str().unwrap()
-					))?);
+				// File & e   : create if and only --force
+				// Dir  & e   : create default.json
+				// File & dne : create
+				// Dir  & dne : create default.json
+				if config_path.exists() {
+					if config_path.is_file() {
+						let error = Err(failure::err_msg(
+							"Use --force if the intent is to overwrite",
+						));
+						return Err(error.context(format!(
+							"Config already exists: {}",
+							config_path.to_str().unwrap()
+						))?);
+					} else {
+						std::fs::create_dir_all(&config_path)?;
+						let config_path = config_path.join("default.json");
+						Config::default()
+							.save(config_path.to_str().unwrap())
+							.with_context(|_| {
+								format!("Saving '{}'", config_path.to_str().unwrap())
+							})?;
+					}
 				} else {
-					Config::default()
-						.save(config_path.to_str().unwrap())
-						.with_context(|_| format!("Saving '{}'", config_path.to_str().unwrap()))?;
+					if config_path.extension().is_some() {
+						if let Some(dir) = config_path.parent() {
+							std::fs::create_dir_all(dir)?;
+						}
+						Config::default()
+							.save(config_path.to_str().unwrap())
+							.with_context(|_| {
+								format!("Saving '{}'", config_path.to_str().unwrap())
+							})?;
+					} else {
+						std::fs::create_dir_all(&config_path)?;
+						let config_path = config_path.join("default.json");
+						Config::default()
+							.save(config_path.to_str().unwrap())
+							.with_context(|_| {
+								format!("Saving '{}'", config_path.to_str().unwrap())
+							})?;
+					}
 				}
 			}
 		}
