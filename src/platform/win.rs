@@ -1,6 +1,6 @@
 use crate::MAX_WINDOW_TITLE_LENGTH;
 #[cfg(windows)]
-use crate::{shrink, Config};
+use crate::{shrink, Config, Window};
 
 use prettytable::{color, format, Attr, Cell, Row, Table};
 use std::path::Path;
@@ -56,6 +56,18 @@ impl WindowState {
 			y: None,
 			w: None,
 			h: None,
+		}
+	}
+
+	pub fn update(&mut self) {
+		if self.hwnd != 0 as HWND {
+			let title = get_window_title(self.hwnd);
+			self.title = Some(title);
+			let (x, y, w, h) = get_window_dimensions(self.hwnd);
+			self.x = Some(x);
+			self.y = Some(y);
+			self.w = Some(w);
+			self.h = Some(h);
 		}
 	}
 }
@@ -114,6 +126,28 @@ pub fn layout_windows<'a>(config: Option<&'a Config>) {
 	if let Some(config) = config {
 		if let Some(mut windows) = list_windows(None) {
 			apply_config(config, &mut windows);
+		}
+	}
+}
+
+/// Applies the config properties to the active window immediately.
+/// Windows API supports a buffering strategy when changing window position and dimensions.
+/// As a result, multiple window changes can be batched to avoid crossing the API boundary
+/// and likely increasing efficiency.
+pub fn layout_window_immediate(active_window: &mut WindowState, config_window: &Window) {
+	#[allow(unused_assignments)]
+	let mut hdwp = NULL;
+	unsafe {
+		hdwp = BeginDeferWindowPos(1);
+	}
+	if hdwp != NULL {
+		active_window.x = config_window.x;
+		active_window.y = config_window.y;
+		active_window.w = config_window.w;
+		active_window.h = config_window.h;
+		apply_profile_properties(&mut hdwp, active_window);
+		unsafe {
+			EndDeferWindowPos(hdwp);
 		}
 	}
 }

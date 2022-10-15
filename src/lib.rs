@@ -270,7 +270,23 @@ impl<'a> WindowManager<'a> {
 	}
 
 	pub fn layout(&self) {
-		sys::layout_windows(self.config)
+		// let interval_milliseconds
+		// if let Some(config) = config {
+		// 	if let Some(mut windows) = list_windows(None) {
+		// 		apply_config(config, &mut windows);
+		// 	}
+		// }
+		// sys::layout_windows(self.config)
+		// TODO find matching Config Window for each WindowState in active_windows
+		let config_window = Window::new();
+		if let Some(active_windows) = self.windows() {
+			for mut active_window in active_windows {
+			}
+		}
+	}
+
+	pub fn layout_window(&self, active_window: &mut sys::WindowState, config_window: &Window) {
+		sys::layout_window_immediate(active_window, config_window);
 	}
 
 	pub fn print(&self) {
@@ -310,6 +326,55 @@ fn shrink(the_string: &str, shrink_len: usize) -> String {
 
 #[cfg(test)]
 mod tests {
+	mod window_manager {
+		mod layout_window {
+			use super::super::super::*;
+
+			#[test]
+			fn moves_x() {
+				let mut active_window = sys::WindowState::new();
+				active_window.x = Some(0);
+				let mut config_window = Window::new();
+				config_window.x = Some(100);
+				let wm = WindowManager::new(None);
+				wm.layout_window(&mut active_window, &config_window);
+				assert_eq!(100, active_window.x.unwrap());
+			}
+
+			#[test]
+			fn moves_y() {
+				let mut active_window = sys::WindowState::new();
+				active_window.y = Some(0);
+				let mut config_window = Window::new();
+				config_window.y = Some(100);
+				let wm = WindowManager::new(None);
+				wm.layout_window(&mut active_window, &config_window);
+				assert_eq!(100, active_window.y.unwrap());
+			}
+
+			#[test]
+			fn moves_w() {
+				let mut active_window = sys::WindowState::new();
+				active_window.w = Some(0);
+				let mut config_window = Window::new();
+				config_window.w = Some(100);
+				let wm = WindowManager::new(None);
+				wm.layout_window(&mut active_window, &config_window);
+				assert_eq!(100, active_window.w.unwrap());
+			}
+
+			#[test]
+			fn moves_h() {
+				let mut active_window = sys::WindowState::new();
+				active_window.h = Some(0);
+				let mut config_window = Window::new();
+				config_window.h = Some(100);
+				let wm = WindowManager::new(None);
+				wm.layout_window(&mut active_window, &config_window);
+				assert_eq!(100, active_window.h.unwrap());
+			}
+		}
+	}
 	mod parse_property_string {
 		use super::super::*;
 
