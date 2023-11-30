@@ -2,7 +2,7 @@ use std::{ptr, ffi::CStr};
 
 use x11::xlib;
 
-use crate::{WindowProvider, layout::{Window, Screen, WindowBuilder}};
+use crate::{WindowProvider, layout::{Window, Screen, WindowBuilder}, Dimensions};
 // extern crate x11;
 
 // use std::ptr;
@@ -38,6 +38,7 @@ impl WindowProvider for X11Provider {
 pub struct X11Screen {
 	pub display_ptr: *mut xlib::Display,
 	pub name: String,
+	pub dimensions: Dimensions,
 }
 
 impl Default for X11Screen {
@@ -48,13 +49,16 @@ impl Default for X11Screen {
         }
 		let display_name_ptr = unsafe { CStr::from_ptr(xlib::XDisplayName(ptr::null())) };
 		let display_name = display_name_ptr.to_str().to_owned().unwrap_or("unknown").to_string();
-		X11Screen { display_ptr, name: display_name }
+		let screen_num = unsafe { xlib::XDefaultScreen(display_ptr) };
+		let width = unsafe { xlib::XDisplayWidth(display_ptr, screen_num) };
+		let height = unsafe { xlib::XDisplayHeight(display_ptr, screen_num) };
+		X11Screen { display_ptr, name: display_name, dimensions: Dimensions::new(width, height) }
 	}
 }
 
 impl std::fmt::Display for X11Screen {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "id: {}, name: \"{}\"", self.display_ptr as u32, self.name)
+		write!(f, "id: {}, name: \"{}\", dimensions: {}", self.display_ptr as u32, self.name, self.dimensions)
 	}
 }
 
@@ -62,6 +66,24 @@ impl std::fmt::Display for X11Screen {
 pub struct X11Window {
 	pub id: i32,
 	pub window: Window,
+}
+
+impl X11Window {
+	pub fn new(id: i32) -> Self {
+		X11Window { id, window: WindowBuilder::default().build().unwrap() }
+	}
+}
+
+impl Default for X11Window {
+	fn default() -> Self {
+		X11Window::new(0)
+	}
+}
+
+impl std::fmt::Display for X11Window {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "id: {}", self.id)
+	}
 }
 
 // mod xdo {

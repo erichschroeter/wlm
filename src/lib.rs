@@ -15,6 +15,7 @@ pub mod platform;
 
 static ELLIPSIS: &str = "...";
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct Point {
 	pub x: i32,
 	pub y: i32,
@@ -32,6 +33,7 @@ impl std::fmt::Display for Point {
 	}
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct Dimensions {
 	pub width: i32,
 	pub height: i32,
