@@ -11,6 +11,12 @@ The intent is to provide cross-platform support, with Windows being the first to
 
     cargo install wlm
 
+### Unix (X11)
+
+```bash
+sudo apt install libx11-dev
+```
+
 # How to Use
 
 ## Create a config

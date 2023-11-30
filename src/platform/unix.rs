@@ -59,27 +59,31 @@ fn list_windows() -> Vec<X11Window> {
         xlib::XQueryTree(display, root, &mut returned_root, &mut returned_parent, &mut top_level_windows, &mut num_top_level_windows);
 
         for i in 0..num_top_level_windows {
-            let window = *top_level_windows.offset(i as isize);
+            let window_index = *top_level_windows.offset(i as isize);
+			let mut window = WindowBuilder::default();
 
             let mut attributes: xlib::XWindowAttributes = std::mem::zeroed();
-            xlib::XGetWindowAttributes(display, window, &mut attributes);
+            xlib::XGetWindowAttributes(display, window_index, &mut attributes);
 
             if attributes.map_state == xlib::IsViewable {
                 let mut name = ptr::null_mut();
-                xlib::XFetchName(display, window, &mut name);
+                xlib::XFetchName(display, window_index, &mut name);
                 if !name.is_null() {
                     let window_name = std::ffi::CStr::from_ptr(name).to_string_lossy();
-                    println!("Window ID: {}, Name: {}", window, window_name);
-					let x11window = X11Window {
-						window: WindowBuilder::default()
-							.title(window_name.to_string())
-							.build()
-							.unwrap(),
-					};
-					x11windows.push(x11window);
+                    println!("Window ID: {}, Name: {}", window_index, window_name);
+					window.title(window_name.to_string());
                     xlib::XFree(name as *mut _);
                 }
+
+				window.x(Some(i32::to_string(&attributes.x)));
+				window.y(Some(i32::to_string(&attributes.y)));
+				window.w(Some(i32::to_string(&attributes.width)));
+				window.h(Some(i32::to_string(&attributes.height)));
             }
+			let x11window = X11Window {
+				window: window.build().unwrap(),
+			};
+			x11windows.push(x11window);
         }
 
         if !top_level_windows.is_null() {
