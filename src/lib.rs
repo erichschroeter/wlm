@@ -472,6 +472,6 @@ pub fn default_window_provider() -> impl WindowProvider {
 	#[cfg(windows)]
 	let provider = crate::platform::win::Win32Provider::default();
 	#[cfg(unix)]
-	let provider = crate::platform::win::X11Provider::default();
+	let provider = crate::platform::unix::X11Provider::default();
 	provider
 }
