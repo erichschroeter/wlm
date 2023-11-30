@@ -40,3 +40,6 @@ predicates = "1.0.4"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["winuser", "processthreadsapi", "psapi", "handleapi", "dwmapi"] }
+
+[target.'cfg(unix)'.dependencies]
+x11 = { version = "2.21.0", features = ["xlib"] }
