@@ -1,14 +1,24 @@
-use crate::MAX_WINDOW_TITLE_LENGTH;
-#[cfg(windows)]
-use crate::{shrink, Config};
+use crate::{Point, WindowProvider};
 
-use prettytable::{color, format, Attr, Cell, Row, Table};
+use crate::layout::{
+	Layout, Screen, ScreenBuilder, Window, WindowBuilder, MAX_WINDOW_TITLE_LENGTH,
+};
+
+#[cfg(windows)]
+use crate::platform::Win32Window as PlatformWindow;
+
+use regex::Regex;
+use std::collections::HashMap;
+use std::ffi::OsString;
+use std::mem;
+use std::os::windows::ffi::OsStringExt;
 use std::path::Path;
-use winapi::shared::minwindef::{DWORD, HINSTANCE, LPARAM, MAX_PATH};
+use std::str::FromStr;
+use winapi::shared::minwindef::{DWORD, HINSTANCE, LPARAM, MAX_PATH, TRUE};
 use winapi::shared::ntdef::NULL;
 use winapi::shared::ntdef::WCHAR;
-use winapi::shared::windef::HWND;
 use winapi::shared::windef::RECT;
+use winapi::shared::windef::{HDC, HMONITOR, HWND, LPRECT};
 use winapi::um::dwmapi::{DwmGetWindowAttribute, DWMWA_CLOAKED};
 // use winapi::um::errhandlingapi::GetLastError;
 use winapi::um::handleapi::CloseHandle;
@@ -21,119 +31,404 @@ use winapi::um::psapi::GetModuleFileNameExW;
 use winapi::um::winnt::HANDLE;
 use winapi::um::winnt::{PROCESS_QUERY_INFORMATION, PROCESS_VM_READ};
 use winapi::um::winuser::{
-	BeginDeferWindowPos, DeferWindowPos, EndDeferWindowPos, EnumWindows, GetWindowLongPtrW,
-	GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible, GWL_EXSTYLE, HDWP,
-	SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_NOZORDER, WM_NULL,
-	WS_EX_TOOLWINDOW, WS_EX_WINDOWEDGE,
+	BeginDeferWindowPos, DeferWindowPos, EndDeferWindowPos, EnumDisplayMonitors, EnumWindows,
+	GetMonitorInfoW, GetWindowLongPtrW, GetWindowRect, GetWindowTextW, GetWindowThreadProcessId,
+	IsWindowVisible, MonitorFromWindow, ShowWindow, GWL_EXSTYLE, HDWP, MONITORINFOEXW,
+	MONITOR_DEFAULTTOPRIMARY, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE,
+	SWP_NOZORDER, SW_SHOWMAXIMIZED, SW_SHOWMINIMIZED, WM_NULL, WS_EX_TOOLWINDOW, WS_EX_WINDOWEDGE,
 };
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct WindowState {
-	pub hwnd: HWND,
-	pub cascade: bool,
-	pub title: Option<String>,
-	pub process: Option<String>,
-	pub x: Option<i32>,
-	pub y: Option<i32>,
-	pub w: Option<i32>,
-	pub h: Option<i32>,
+pub struct Rectangle(RECT);
+
+impl Rectangle {
+	pub fn new(x: i32, y: i32, width: i32, height: i32) -> Self {
+		Rectangle {
+			0: RECT {
+				left: x,
+				top: y,
+				right: x + width,
+				bottom: y + height,
+			},
+		}
+	}
+	/// Returns the upper left point of the `Rectangle`.
+	pub fn origin(&self) -> Point {
+		Point {
+			x: self.0.left,
+			y: self.0.top,
+		}
+	}
+	pub fn width(&self) -> i32 {
+		self.0.right - self.0.left
+	}
+
+	pub fn height(&self) -> i32 {
+		self.0.bottom - self.0.top
+	}
 }
 
-impl std::fmt::Display for WindowState {
+impl Default for Rectangle {
+	fn default() -> Self {
+		Rectangle::new(0, 0, 0, 0)
+	}
+}
+
+impl std::fmt::Display for Rectangle {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(
+			f,
+			"[{}x{}] @ {}",
+			self.width(),
+			self.height(),
+			self.origin()
+		)
+	}
+}
+
+impl From<Point> for Rectangle {
+	fn from(p: Point) -> Self {
+		Rectangle::new(p.x, p.y, 0, 0)
+	}
+}
+
+impl From<RECT> for Rectangle {
+	fn from(value: RECT) -> Self {
+		Rectangle::new(
+			value.top,
+			value.left,
+			value.left - value.right,
+			value.top - value.bottom,
+		)
+	}
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Win32Window {
+	pub hwnd: HWND,
+	pub monitor: HMONITOR,
+	pub window: Window,
+}
+
+impl std::fmt::Display for Win32Window {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		write!(f, "{:#?}", &self)
 	}
 }
 
-impl WindowState {
-	pub fn new() -> Self {
-		WindowState {
-			hwnd: 0 as HWND,
-			cascade: true,
-			title: None,
-			process: None,
-			x: None,
-			y: None,
-			w: None,
-			h: None,
+/// Converts a string representation of a size into pixels.
+///
+/// This function takes a size value as a string and a reference to a `Rectangle` representing
+/// monitor information. The size can be specified in either percentage or pixels. If a
+/// percentage is provided, it calculates the size relative to the width of the monitor
+/// specified in `monitor_info`. If a pixel value is provided, it returns that value directly.
+///
+/// # Arguments
+/// * `value` - A string slice that holds the size to be converted. This can be in the format
+///   of a percentage (like "50%") or a pixel count (like "200px" or "200").
+/// * `monitor_info` - A reference to a `Rectangle` struct representing the dimensions of the
+///   monitor. This is used to calculate the pixel value when a percentage is provided.
+///
+/// # Returns
+/// An `i32` representing the size in pixels. If the input string is not in a recognized format, it returns 0.
+///
+/// # Examples
+/// ```
+/// # use wlm::platform::win::{into_pixels, Rectangle};
+/// let monitor = Rectangle::new(0, 0, 1920, 1080); // Example monitor dimensions
+/// assert_eq!(into_pixels("50%", &monitor), 960);  // 50% of 1920
+/// assert_eq!(into_pixels("200px", &monitor), 200); // Explicit pixel value
+/// ```
+///
+/// # Errors
+/// This function panics if the regex expressions fail to compile, which is unlikely in normal usage.
+pub fn into_pixels<S: AsRef<str>>(value: S, monitor_info: &Rectangle) -> i32 {
+	let percent_regex = Regex::new(r"(?P<percent>\d+)%").unwrap();
+	if let Some(percent) = percent_regex.captures(value.as_ref()) {
+		if let Ok(percent) = f64::from_str(percent.name("percent").unwrap().as_str()) {
+			let percentage = percent / 100.0;
+			let pixels = f64::from(monitor_info.width()) * percentage;
+			let pixels = pixels.abs();
+			log::error!(
+				"percent {} -> percentage {} -> pixels {}",
+				percent,
+				percentage,
+				pixels
+			);
+			return pixels as i32;
 		}
+	}
+	let pixels_regex = Regex::new(r"(?P<pixels>\d+)(px)?").unwrap();
+	if let Some(pixels) = pixels_regex.captures(value.as_ref()) {
+		let count = i32::from_str(pixels.name("pixels").unwrap().as_str()).unwrap();
+		count
+	} else {
+		0
+	}
+}
+
+impl Win32Window {
+	pub fn new(hwnd: HWND) -> Self {
+		let title = property::get_title(hwnd);
+		let process = property::get_process(hwnd);
+		let monitor = property::get_monitor(hwnd);
+		let rect = property::get_rect(hwnd);
+		let origin = rect.origin();
+		Win32Window {
+			hwnd,
+			monitor: monitor,
+			window: WindowBuilder::default()
+				.title(title)
+				.process(process)
+				.x(origin.x.to_string())
+				.y(origin.y.to_string())
+				.w(rect.width().to_string())
+				.h(rect.height().to_string())
+				.build()
+				.unwrap(),
+		}
+	}
+
+	/// See https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-deferwindowpos
+	pub fn update(&self, hdwp: &mut HDWP) {
+		let rect = property::get_rect(self.hwnd);
+		let origin = rect.origin();
+		let mut flags = SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE;
+		if self.window.x.is_none() && self.window.y.is_none() {
+			flags |= SWP_NOMOVE;
+		}
+		if self.window.w.is_none() && self.window.h.is_none() {
+			flags |= SWP_NOSIZE;
+		}
+		let monitor_info = Win32Monitor::from(self.monitor);
+		let monitor_info = Rectangle::from(monitor_info.info.rcWork);
+		// TODO match Windows with non-null process and title
+		// TODO match Windows with non-null process
+		// TODO match Windows with non-null title
+		//
+		// TODO match Windows with x, y to reposition
+		// TODO match Windows with w, h to resize
+		// TODO match Windows with maximize to maximize
+		// TODO match Windows with maximize_horizontal to maximize_horizontal
+		// TODO match Windows with maximize_vertical to maximize_vertical
+		let pixels_x = if let Some(x_str) = &self.window.x {
+			// Pixels::from_str(&x_str).unwrap().count
+			into_pixels(x_str, &monitor_info)
+		} else {
+			origin.x
+		};
+		let pixels_y = if let Some(y_str) = &self.window.y {
+			// Pixels::from_str(&y_str).unwrap().count
+			into_pixels(y_str, &monitor_info)
+		} else {
+			origin.y
+		};
+		let pixels_w = if let Some(w_str) = &self.window.w {
+			// Pixels::from_str(&w_str).unwrap().count
+			into_pixels(w_str, &monitor_info)
+		} else {
+			rect.width()
+		};
+		let pixels_h = if let Some(h_str) = &self.window.h {
+			// Pixels::from_str(&h_str).unwrap().count
+			into_pixels(h_str, &monitor_info)
+		} else {
+			rect.height()
+		};
+		if let Some(title) = &self.window.title {
+			log::trace!("winapi::DeferWindowPos -- {} for \"{}\"", rect, title);
+		} else if let Some(process) = &self.window.process {
+			log::trace!("winapi::DeferWindowPos -- {} for \"{}\"", rect, process);
+		}
+		*hdwp = unsafe {
+			DeferWindowPos(
+				*hdwp,
+				self.hwnd,
+				WM_NULL as HWND,
+				pixels_x,
+				pixels_y,
+				pixels_w,
+				pixels_h,
+				flags,
+			)
+		};
+		if self.window.minimized.is_some() {
+			log::trace!("winapi::ShowWindow minimized");
+			unsafe {
+				ShowWindow(self.hwnd, SW_SHOWMINIMIZED);
+			}
+		}
+		if self.window.maximized.is_some() {
+			log::trace!("winapi::ShowWindow maximized");
+			unsafe {
+				ShowWindow(self.hwnd, SW_SHOWMAXIMIZED);
+			}
+		}
+		if *hdwp == NULL {
+			log::error!(
+				"winapi::DeferWindowPos error: {}",
+				std::io::Error::last_os_error()
+			);
+		}
+	}
+
+	pub fn layout(&mut self, hdwp: &mut HDWP, layout: &Window) {
+		self.window = layout.clone();
+		self.update(hdwp);
+	}
+
+	#[allow(dead_code)]
+	pub fn get_rect(&self) -> Rectangle {
+		property::get_rect(self.hwnd)
+	}
+
+	#[allow(dead_code)]
+	pub fn get_title(&self) -> String {
+		property::get_title(self.hwnd)
+	}
+
+	#[allow(dead_code)]
+	pub fn get_process(&self) -> String {
+		property::get_process(self.hwnd)
+	}
+
+	#[allow(dead_code)]
+	pub fn get_monitor(&self) -> HMONITOR {
+		property::get_monitor(self.hwnd)
+	}
+}
+
+impl Default for Win32Window {
+	fn default() -> Self {
+		Win32Window::new(0 as HWND)
+	}
+}
+
+impl From<HWND> for Win32Window {
+	fn from(hwnd: HWND) -> Self {
+		Win32Window::new(hwnd)
 	}
 }
 
 #[derive(Debug)]
-struct Windows<'a> {
-	config: Option<&'a Config>,
-	list: Vec<WindowState>,
+pub struct Win32Provider;
+
+impl Default for Win32Provider {
+	fn default() -> Self {
+		Win32Provider {}
+	}
 }
 
-pub fn list_windows<'a>(config: Option<&'a Config>) -> Option<Vec<WindowState>> {
-	let mut windows_state = Windows {
-		config: config,
-		list: Vec::new(),
+pub struct Win32Monitor {
+	hmonitor: HMONITOR,
+	info: MONITORINFOEXW,
+}
+
+impl Win32Monitor {
+	pub fn new(hmonitor: HMONITOR) -> Self {
+		let info = unsafe {
+			let mut monitor_info: MONITORINFOEXW = mem::zeroed();
+			monitor_info.cbSize = mem::size_of::<MONITORINFOEXW>() as u32;
+			let monitor_info_ptr = <*mut _>::cast(&mut monitor_info);
+			let result = GetMonitorInfoW(hmonitor, monitor_info_ptr);
+			if result == TRUE {
+				monitor_info
+			} else {
+				panic!("GetMonitorInfoW Error: {}", std::io::Error::last_os_error())
+			}
+		};
+		let monitor = Win32Monitor { hmonitor, info };
+		log::trace!("winapi::GetMonitorInfoW returned -- {}", monitor);
+		monitor
+	}
+
+	pub fn title(&self) -> String {
+		let name = match &self.info.szDevice[..].iter().position(|c| *c == 0) {
+			Some(len) => OsString::from_wide(&self.info.szDevice[0..*len]),
+			None => OsString::from_wide(&self.info.szDevice[0..self.info.szDevice.len()]),
+		};
+		name.into_string().unwrap()
+	}
+}
+
+impl From<HMONITOR> for Win32Monitor {
+	fn from(value: HMONITOR) -> Self {
+		Win32Monitor::new(value)
+	}
+}
+
+impl std::fmt::Display for Win32Monitor {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let rc_monitor = Rectangle::from(self.info.rcMonitor);
+		let rc_work = Rectangle::from(self.info.rcWork);
+		write!(
+			f,
+			r#"[name: "{}", handle: {}, rcMonitor: {}, rcWork: {}]"#,
+			self.title(),
+			self.hmonitor as u32,
+			rc_monitor,
+			rc_work,
+		)
+		// write!(
+		// 	f,
+		// 	r#"[name: "{}", handle: {}, left: {}, right: {}, top: {}, bottom: {}]"#,
+		// 	name.to_str().unwrap(),
+		// 	self.hmonitor as u32,
+		// 	self.info.rcWork.left,
+		// 	self.info.rcWork.right,
+		// 	self.info.rcWork.top,
+		// 	self.info.rcWork.bottom
+		// )
+	}
+}
+
+pub fn list_monitors() -> Vec<Win32Monitor> {
+	let mut monitors = Vec::new();
+	let userdata = &mut monitors as *mut _;
+	let result = unsafe {
+		EnumDisplayMonitors(
+			std::ptr::null_mut(),
+			std::ptr::null(),
+			Some(monitor_enum_callback),
+			userdata as LPARAM,
+		)
 	};
-	let struct_ptr = &mut windows_state as *mut Windows;
+	if result != TRUE {
+		panic!(
+			"Could not enumerate monitors: {}",
+			std::io::Error::last_os_error()
+		)
+	}
+	monitors
+}
+
+unsafe extern "system" fn monitor_enum_callback(
+	monitor: HMONITOR,
+	_hdc: HDC,
+	_rect: LPRECT,
+	userdata: LPARAM,
+) -> i32 {
+	let monitors: &mut Vec<Win32Monitor> = mem::transmute(userdata);
+	let monitor = Win32Monitor::from(monitor);
+	monitors.push(monitor);
+	TRUE
+}
+
+pub fn list_windows<'a>() -> Option<Vec<Win32Window>> {
+	let mut list = Vec::new();
+	let struct_ptr = &mut list as *mut Vec<Win32Window>;
 	unsafe {
 		EnumWindows(Some(filter_windows_callback), struct_ptr as LPARAM);
 	}
-	Some(windows_state.list)
+	Some(list)
 }
 
-pub fn print_windows<'a>(config: Option<&'a Config>) {
-	let mut table = Table::new();
-	if let Some(windows) = list_windows(config) {
-		table.set_format(*format::consts::FORMAT_NO_COLSEP);
-		table.add_row(Row::new(vec![
-			Cell::new("Title").style_spec("c"),
-			Cell::new("Process").style_spec("c"),
-			Cell::new("Position").style_spec("c"),
-			Cell::new("Dimension").style_spec("c"),
-		]));
-		for w in windows {
-			table.add_row(Row::new(vec![
-				Cell::new(&shrink(w.title.as_ref().unwrap(), 32))
-					.with_style(Attr::ForegroundColor(color::RED)),
-				Cell::new(&shrink(w.process.as_ref().unwrap(), 64))
-					.with_style(Attr::ForegroundColor(color::GREEN)),
-				Cell::new(&format!(
-					"({}, {})",
-					w.x.as_ref().unwrap(),
-					w.y.as_ref().unwrap()
-				)),
-				Cell::new(&format!(
-					"{} x {}",
-					w.w.as_ref().unwrap(),
-					w.h.as_ref().unwrap()
-				)),
-			]));
-		}
+unsafe extern "system" fn filter_windows_callback(hwnd: HWND, l_param: LPARAM) -> i32 {
+	let window_list = l_param as *mut Vec<Win32Window>;
+	match check_valid_window(hwnd) {
+		Some(window) => (*window_list).push(window),
+		None => {}
 	}
-	table.printstd();
-}
-
-pub fn layout_windows<'a>(config: Option<&'a Config>) {
-	if let Some(config) = config {
-		if let Some(mut windows) = list_windows(None) {
-			apply_config(config, &mut windows);
-		}
-	}
-}
-
-impl From<HWND> for WindowState {
-	fn from(item: HWND) -> Self {
-		let title = get_window_title(item);
-		let process = get_window_process(item);
-		let (x, y, w, h) = get_window_dimensions(item);
-		WindowState {
-			hwnd: item,
-			cascade: true,
-			title: Some(title),
-			process: Some(process),
-			x: Some(x),
-			y: Some(y),
-			w: Some(w),
-			h: Some(h),
-		}
-	}
+	1
 }
 
 fn basename(path: &str) -> String {
@@ -145,64 +440,7 @@ fn basename(path: &str) -> String {
 	window_process.to_owned()
 }
 
-fn get_window_process(hwnd: HWND) -> String {
-	let mut proc_id: DWORD = 0;
-	let mut window_process: [WCHAR; MAX_PATH] = [0; MAX_PATH];
-	unsafe {
-		GetWindowThreadProcessId(hwnd, &mut proc_id);
-		let process_handle: HANDLE =
-			OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, proc_id);
-		GetModuleFileNameExW(
-			process_handle,
-			NULL as HINSTANCE,
-			window_process.as_mut_ptr(),
-			MAX_PATH as u32,
-		);
-		CloseHandle(process_handle);
-	}
-	let mut window_process = window_process.to_vec();
-	if let Some(first) = window_process.iter().position(|&b| b == 0) {
-		window_process.truncate(first)
-	}
-	String::from_utf16(&window_process).unwrap()
-}
-
-fn get_window_title(hwnd: HWND) -> String {
-	let mut window_title: [WCHAR; MAX_WINDOW_TITLE_LENGTH] = [0; MAX_WINDOW_TITLE_LENGTH];
-	unsafe {
-		GetWindowTextW(
-			hwnd,
-			window_title.as_mut_ptr(),
-			MAX_WINDOW_TITLE_LENGTH as i32,
-		);
-	}
-	let mut window_title = window_title.to_vec();
-	if let Some(first) = window_title.iter().position(|&b| b == 0) {
-		window_title.truncate(first);
-	}
-	String::from_utf16(&window_title).unwrap()
-}
-
-fn get_window_dimensions(hwnd: HWND) -> (i32, i32, i32, i32) {
-	let mut dimensions = RECT {
-		left: 0,
-		top: 0,
-		right: 0,
-		bottom: 0,
-	};
-	let dimptr = &mut dimensions as *mut RECT;
-	unsafe {
-		GetWindowRect(hwnd, dimptr);
-	}
-	(
-		dimensions.left,
-		dimensions.top,
-		dimensions.right - dimensions.left,
-		dimensions.bottom - dimensions.top,
-	)
-}
-
-fn check_valid_window(hwnd: HWND) -> Option<WindowState> {
+fn check_valid_window(hwnd: HWND) -> Option<Win32Window> {
 	#[allow(unused_assignments)]
 	let mut is_visible = false;
 	#[allow(unused_assignments)]
@@ -218,8 +456,8 @@ fn check_valid_window(hwnd: HWND) -> Option<WindowState> {
 		&& !is_toolwindow
 		&& !is_invisible_win10_background_app_window(hwnd)
 	{
-		let window_title = get_window_title(hwnd);
-		let window_process = get_window_process(hwnd);
+		let window_title = property::get_title(hwnd);
+		let window_process = property::get_process(hwnd);
 		let window_process = basename(&window_process);
 		// There are typically a lot of explorer.exe "windows" that get listed
 		// that don't have a UI, so filter them out to avoid clutter.
@@ -245,202 +483,316 @@ fn is_invisible_win10_background_app_window(hwnd: HWND) -> bool {
 			my_ptr as *mut winapi::ctypes::c_void,
 			std::mem::size_of::<u32>() as u32,
 		);
-		if cloaked_value != 0 {
-			true
-		} else {
-			false
-		}
 	}
-}
-
-pub struct Position {
-	pub x: i32,
-	pub y: i32,
-}
-
-pub struct Dimensions {
-	pub width: i32,
-	pub height: i32,
-}
-
-fn apply_profile_properties(hdwp: &mut HDWP, window: &WindowState) {
-	let mut pos = Position { x: 0, y: 0 };
-	let mut dim = Dimensions {
-		width: 0,
-		height: 0,
-	};
-	/*
-	 * 0x0020 | SWP_DRAWFRAME      | Draws a frame (defined in the window's class
-	 *        |                    | description) around the window.
-	 * 0x0020 | SWP_FRAMECHANGED   | Sends a WM_NCCALCSIZE message to the window,
-	 *        |                    | even if the window's size is not being changed.
-	 *        |                    | If this flag is not specified, WM_NCCALCSIZE
-	 *        |                    | is sent only when the window's size is being changed.
-	 * 0x0080 | SWP_HIDEWINDOW     | Hides the window.
-	 * 0x0010 | SWP_NOACTIVATE     | Does not activate the window. If this flag is
-	 *        |                    | not set, the window is activated and moved to
-	 *        |                    | the top of either the topmost or non-topmost
-	 *        |                    | group (depending on the setting of the hWndInsertAfter parameter).
-	 * 0x0100 | SWP_NOCOPYBITS     | Discards the entire contents of the client area.
-	 *        |                    | If this flag is not specified, the valid contents
-	 *        |                    | of the client area are saved and copied back into
-	 *        |                    | the client area after the window is sized or repositioned.
-	 * 0x0002 | SWP_NOMOVE         | Retains the current position (ignores the x and y parameters).
-	 * 0x0200 | SWP_NOOWNERZORDER  | Does not change the owner window's position in the Z order.
-	 * 0x0008 | SWP_NOREDRAW       | Does not redraw changes. If this flag is set,
-	 *        |                    | no repainting of any kind occurs. This applies
-	 *        |                    | to the client area, the nonclient area (including
-	 *        |                    | the title bar and scroll bars), and any part of
-	 *        |                    | the parent window uncovered as a result of the
-	 *        |                    | window being moved. When this flag is set, the
-	 *        |                    | application must explicitly invalidate or redraw
-	 *        |                    | any parts of the window and parent window that need redrawing.
-	 * 0x0200 | SWP_NOREPOSITION   | Same as the SWP_NOOWNERZORDER flag.
-	 * 0x0400 | SWP_NOSENDCHANGING | Prevents the window from receiving the WM_WINDOWPOSCHANGING message.
-	 * 0x0001 | SWP_NOSIZE         | Retains the current size (ignores the cx and cy parameters).
-	 * 0x0004 | SWP_NOZORDER       | Retains the current Z order (ignores the hWndInsertAfter parameter).
-	 * 0x0040 | SWP_SHOWWINDOW     | Displays the window.
-	 */
-	let mut flags = SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE;
-	if window.x.is_none() && window.y.is_none() {
-		flags |= SWP_NOMOVE;
+	if cloaked_value != 0 {
+		true
 	} else {
-		if let Some(x) = window.x {
-			pos.x = x;
-		}
-		if let Some(y) = window.y {
-			pos.y = y;
-		}
+		false
 	}
-	if window.w.is_none() && window.h.is_none() {
-		flags |= SWP_NOSIZE;
-	} else {
-		if let Some(w) = window.w {
-			dim.width = w;
+}
+
+pub mod property {
+	use super::*;
+
+	pub fn get_rect(hwnd: HWND) -> Rectangle {
+		let mut rect = Rectangle::default();
+		let rect_ptr = &mut rect.0 as *mut RECT;
+		let result = unsafe { GetWindowRect(hwnd, rect_ptr) };
+		if result == 0 {
+			log::warn!(
+				"winapi::GetWindowRect error: {}",
+				std::io::Error::last_os_error()
+			);
 		}
-		if let Some(h) = window.h {
-			dim.height = h;
-		}
+		log::trace!("winapi::GetWindowRect({}) returned {}", hwnd as u32, rect,);
+		rect
 	}
-	unsafe {
-		*hdwp = DeferWindowPos(
-			*hdwp,
-			window.hwnd,
-			WM_NULL as HWND,
-			pos.x,
-			pos.y,
-			dim.width,
-			dim.height,
-			flags,
+
+	pub fn get_title(hwnd: HWND) -> String {
+		let mut window_title: [WCHAR; MAX_WINDOW_TITLE_LENGTH] = [0; MAX_WINDOW_TITLE_LENGTH];
+		let result = unsafe {
+			GetWindowTextW(
+				hwnd,
+				window_title.as_mut_ptr(),
+				MAX_WINDOW_TITLE_LENGTH as i32,
+			)
+		};
+		if result == 0 {
+			log::warn!(
+				"winapi::GetWindowTextW error: {}",
+				std::io::Error::last_os_error()
+			);
+		}
+		let mut window_title = window_title.to_vec();
+		if let Some(first) = window_title.iter().position(|&b| b == 0) {
+			window_title.truncate(first);
+		}
+		let title = String::from_utf16(&window_title).unwrap();
+		log::trace!(
+			"winapi::GetWindowTextW({}) returned \"{}\"",
+			hwnd as i32,
+			title
 		);
+		title
+	}
+
+	pub fn get_process(hwnd: HWND) -> String {
+		let mut proc_id: DWORD = 0;
+		let mut window_process: [WCHAR; MAX_PATH] = [0; MAX_PATH];
+		let result = unsafe {
+			GetWindowThreadProcessId(hwnd, &mut proc_id);
+			let process_handle: HANDLE =
+				OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, proc_id);
+			let result = GetModuleFileNameExW(
+				process_handle,
+				NULL as HINSTANCE,
+				window_process.as_mut_ptr(),
+				MAX_PATH as u32,
+			);
+			CloseHandle(process_handle);
+			result
+		};
+		if result == 0 {
+			log::warn!(
+				"winapi::GetModuleFileNameExW error: {}",
+				std::io::Error::last_os_error()
+			);
+		}
+		let mut window_process = window_process.to_vec();
+		if let Some(first) = window_process.iter().position(|&b| b == 0) {
+			window_process.truncate(first)
+		}
+		let process = String::from_utf16(&window_process).unwrap();
+		log::trace!(
+			"winapi::GetWindowThreadProcessId({}) returned \"{}\"",
+			hwnd as i32,
+			process
+		);
+		process
+	}
+
+	pub fn get_monitor(hwnd: HWND) -> HMONITOR {
+		#[allow(unused_assignments)]
+		let monitor_handle = unsafe { MonitorFromWindow(hwnd, MONITOR_DEFAULTTOPRIMARY) };
+		log::trace!(
+			"winapi::MonitorFromWindow({}) returned {}",
+			hwnd as i32,
+			monitor_handle as i32
+		);
+		monitor_handle
 	}
 }
 
-fn apply_config(config: &Config, windows: &mut [WindowState]) {
-	#[allow(unused_assignments)]
-	let mut hdwp = NULL;
-	unsafe {
-		hdwp = BeginDeferWindowPos(1);
-	}
-
-	for ms_win in windows {
-		if let Some(cfg_win) = config.search(ms_win) {
-			ms_win.x = cfg_win.x;
-			ms_win.y = cfg_win.y;
-			ms_win.w = cfg_win.w;
-			ms_win.h = cfg_win.h;
-			apply_profile_properties(&mut hdwp, ms_win);
+fn find_match_by_title_and_process(
+	windows: &Vec<Win32Window>,
+	title_regex: &Regex,
+	process_regex: &Regex,
+) -> Option<PlatformWindow> {
+	for w in windows {
+		match (&w.window.title, &w.window.process) {
+			(Some(title), Some(process)) => {
+				if title_regex.is_match(&title) && process_regex.is_match(&process) {
+					return Some(w.clone());
+				}
+			}
+			_ => {}
 		}
 	}
+	None
+}
 
-	if hdwp != NULL {
+fn find_match_by_title(windows: &Vec<Win32Window>, title_regex: &Regex) -> Option<PlatformWindow> {
+	for w in windows {
+		match &w.window.title {
+			Some(title) => {
+				if title_regex.is_match(&title) {
+					return Some(w.clone());
+				}
+			}
+			_ => {}
+		}
+	}
+	None
+}
+
+fn find_match_by_process(
+	windows: &Vec<Win32Window>,
+	process_regex: &Regex,
+) -> Option<PlatformWindow> {
+	for w in windows {
+		match &w.window.process {
+			Some(process) => {
+				if process_regex.is_match(&process) {
+					return Some(w.clone());
+				}
+			}
+			_ => {}
+		}
+	}
+	None
+}
+
+fn find_match(windows: &Vec<Win32Window>, win: &Window) -> Option<PlatformWindow> {
+	match (&win.title, &win.process) {
+		(Some(title_regex), Some(process_regex)) => {
+			match (Regex::new(title_regex), Regex::new(process_regex)) {
+				(Ok(title_regex), Ok(process_regex)) => {
+					return find_match_by_title_and_process(windows, &title_regex, &process_regex);
+				}
+				_ => {}
+			}
+		}
+		(Some(title_regex), None) => {
+			if let Ok(title_regex) = Regex::new(title_regex) {
+				return find_match_by_title(windows, &title_regex);
+			}
+		}
+		(None, Some(process_regex)) => {
+			if let Ok(process_regex) = Regex::new(process_regex) {
+				return find_match_by_process(windows, &process_regex);
+			}
+		}
+		_ => {}
+	}
+	None
+}
+
+impl WindowProvider for Win32Provider {
+	fn screens(&self) -> Vec<Screen> {
+		let mut screen_map = HashMap::new();
+		let mut screen_count = 0;
+		for win32monitor in list_monitors() {
+			let screen = ScreenBuilder::default().id(screen_count).build().unwrap();
+			screen_map.insert(win32monitor.hmonitor, screen);
+			log::debug!("Screen {}", win32monitor.hmonitor as i32);
+			screen_count += 1;
+		}
+
+		if let Some(windows) = list_windows() {
+			for window in windows {
+				log::debug!("Window {}", window);
+				if let Some(screen) = screen_map.get_mut(&window.monitor) {
+					log::debug!("HERE {}", screen);
+					let window = WindowBuilder::default()
+						.title(window.window.title)
+						.process(window.window.process)
+						.x(window.window.x)
+						.y(window.window.y)
+						.w(window.window.w)
+						.h(window.window.h)
+						.build()
+						.unwrap();
+					screen.windows.push(window);
+				}
+			}
+		}
+		screen_map.values().cloned().collect()
+	}
+
+	fn layout(&self, layout: &Layout) {
+		let windows = list_windows().or(Some(Vec::new())).unwrap();
+		#[allow(unused_assignments)]
+		let mut hdwp = NULL;
 		unsafe {
-			EndDeferWindowPos(hdwp);
+			hdwp = BeginDeferWindowPos(1);
+		}
+
+		for s in &layout.screens {
+			for layout_window in &s.windows {
+				if let Some(mut win32window) = find_match(&windows, &layout_window) {
+					win32window.layout(&mut hdwp, &layout_window);
+				}
+			}
+		}
+
+		if hdwp != NULL {
+			unsafe {
+				EndDeferWindowPos(hdwp);
+			}
 		}
 	}
-}
-
-unsafe extern "system" fn filter_windows_callback(hwnd: HWND, l_param: LPARAM) -> i32 {
-	let windows_struct = l_param as *mut Windows;
-	match check_valid_window(hwnd) {
-		Some(window) => (*windows_struct).list.push(window),
-		None => {}
-	}
-	1
 }
 
 #[cfg(test)]
 mod tests {
-	mod apply_config {
+	mod rectangle {
 		use super::super::*;
-		use crate::{ConfigBuilder, WindowBuilder};
 
 		#[test]
-		fn window_state_x_updated_to_matching_config() {
-			let w1 = WindowBuilder::default()
-				.title(Some("Window 1".to_string()))
-				.x(Some(100))
-				.build()
-				.unwrap();
-			let config = ConfigBuilder::default().windows(vec![w1]).build().unwrap();
-			let mut ws1 = WindowState::new();
-			ws1.title = Some("Window 1".to_string());
-			ws1.x = Some(0);
-			let mut windows = vec![ws1];
-			apply_config(&config, &mut windows);
-			let ws1 = windows.pop().unwrap();
-			assert_eq!(100, ws1.x.unwrap());
+		fn calc_width() {
+			let mut r = Rectangle::from(Point::new(0, 0));
+			r.0.right = 2;
+			assert_eq!(r.width(), 2);
 		}
 
 		#[test]
-		fn window_state_y_updated_to_matching_config() {
+		fn calc_height() {
+			let mut r = Rectangle::from(Point::new(0, 0));
+			r.0.bottom = 3;
+			assert_eq!(r.height(), 3);
+		}
+	}
+	mod win32window {
+		use super::super::*;
+
+		#[test]
+		fn layout_updates_x() {
+			let mut hdwp = NULL;
 			let w1 = WindowBuilder::default()
 				.title(Some("Window 1".to_string()))
-				.y(Some(100))
+				.x(Some("100".to_string()))
 				.build()
 				.unwrap();
-			let config = ConfigBuilder::default().windows(vec![w1]).build().unwrap();
-			let mut ws1 = WindowState::new();
-			ws1.title = Some("Window 1".to_string());
-			ws1.y = Some(0);
-			let mut windows = vec![ws1];
-			apply_config(&config, &mut windows);
-			let ws1 = windows.pop().unwrap();
-			assert_eq!(100, ws1.y.unwrap());
+			let mut ws1 = Win32Window::default();
+			ws1.window.title = Some("Window 1".to_string());
+			ws1.window.x = Some("0".to_string());
+			ws1.layout(&mut hdwp, &w1);
+			assert_eq!("100", ws1.window.x.unwrap());
 		}
 
 		#[test]
-		fn window_state_w_updated_to_matching_config() {
+		fn layout_updates_y() {
+			let mut hdwp = NULL;
 			let w1 = WindowBuilder::default()
 				.title(Some("Window 1".to_string()))
-				.w(Some(100))
+				.y(Some("100".to_string()))
 				.build()
 				.unwrap();
-			let config = ConfigBuilder::default().windows(vec![w1]).build().unwrap();
-			let mut ws1 = WindowState::new();
-			ws1.title = Some("Window 1".to_string());
-			ws1.w = Some(0);
-			let mut windows = vec![ws1];
-			apply_config(&config, &mut windows);
-			let ws1 = windows.pop().unwrap();
-			assert_eq!(100, ws1.w.unwrap());
+			let mut ws1 = Win32Window::default();
+			ws1.window.title = Some("Window 1".to_string());
+			ws1.window.y = Some("0".to_string());
+			ws1.layout(&mut hdwp, &w1);
+			assert_eq!("100", ws1.window.y.unwrap());
 		}
 
 		#[test]
-		fn window_state_h_updated_to_matching_config() {
+		fn layout_updates_w() {
+			let mut hdwp = NULL;
 			let w1 = WindowBuilder::default()
 				.title(Some("Window 1".to_string()))
-				.h(Some(100))
+				.w(Some("100".to_string()))
 				.build()
 				.unwrap();
-			let config = ConfigBuilder::default().windows(vec![w1]).build().unwrap();
-			let mut ws1 = WindowState::new();
-			ws1.title = Some("Window 1".to_string());
-			ws1.h = Some(0);
-			let mut windows = vec![ws1];
-			apply_config(&config, &mut windows);
-			let ws1 = windows.pop().unwrap();
-			assert_eq!(100, ws1.h.unwrap());
+			let mut ws1 = Win32Window::default();
+			ws1.window.title = Some("Window 1".to_string());
+			ws1.window.w = Some("0".to_string());
+			ws1.layout(&mut hdwp, &w1);
+			assert_eq!("100", ws1.window.w.unwrap());
+		}
+
+		#[test]
+		fn layout_updates_h() {
+			let mut hdwp = NULL;
+			let w1 = WindowBuilder::default()
+				.title(Some("Window 1".to_string()))
+				.h(Some("100".to_string()))
+				.build()
+				.unwrap();
+			let mut ws1 = Win32Window::default();
+			ws1.window.title = Some("Window 1".to_string());
+			ws1.window.h = Some("0".to_string());
+			ws1.layout(&mut hdwp, &w1);
+			assert_eq!("100", ws1.window.h.unwrap());
 		}
 	}
 }

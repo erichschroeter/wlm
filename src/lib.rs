@@ -1,552 +1,477 @@
-extern crate failure;
 #[macro_use]
 extern crate derive_builder;
 #[macro_use]
-extern crate failure_derive;
-extern crate regex;
+extern crate serde;
 
-#[cfg(test)]
-use assert_fs::prelude::*;
-#[cfg(test)]
-use predicates::prelude::*;
-
-use prettytable::{color, format, Attr, Cell, Row, Table};
-use regex::Regex;
-use serde::{Deserialize, Serialize};
-use std::fs::OpenOptions;
-use std::path::PathBuf;
+pub mod layout;
 
 #[cfg(windows)]
 #[path = "platform/mod.rs"]
-mod platform;
-#[cfg(windows)]
-use platform as sys;
+pub mod platform;
 
-pub const MAX_WINDOW_TITLE_LENGTH: usize = 128;
+#[cfg(unix)]
+#[path = "platform/mod.rs"]
+pub mod platform;
 
-type Result<T> = std::result::Result<T, Error>;
+static ELLIPSIS: &str = "...";
 
-#[derive(Fail, Debug)]
-pub enum Error {
-	#[fail(display = "IO error: {}", error)]
-	Io { error: std::io::Error },
-	#[fail(display = "Validation error: {}", error)]
-	Validation { error: serde_json::Error },
-	#[fail(display = "Invalid property")]
-	InvalidProperty,
-	#[fail(display = "Invalid index")]
-	InvalidIndex,
+pub struct Point {
+	pub x: i32,
+	pub y: i32,
 }
 
-impl From<std::io::Error> for Error {
-	fn from(err: std::io::Error) -> Error {
-		Error::Io { error: err }
+impl Point {
+	pub fn new(x: i32, y: i32) -> Self {
+		Point { x, y }
 	}
 }
 
-impl From<serde_json::Error> for Error {
-	fn from(err: serde_json::Error) -> Error {
-		Error::Validation { error: err }
+impl std::fmt::Display for Point {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "({}, {})", self.x, self.y)
 	}
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Builder)]
-#[builder(setter(into))]
-pub struct Window {
-	#[builder(default)]
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub title: Option<String>,
-	#[builder(default)]
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub process: Option<String>,
-	#[builder(default)]
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub x: Option<i32>,
-	#[builder(default)]
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub y: Option<i32>,
-	#[builder(default)]
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub w: Option<i32>,
-	#[builder(default)]
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub h: Option<i32>,
+pub struct Dimensions {
+	pub width: i32,
+	pub height: i32,
 }
 
-impl Window {
-	pub fn new() -> Self {
-		Window {
-			title: None,
-			process: None,
-			x: None,
-			y: None,
-			w: None,
-			h: None,
-		}
+impl Dimensions {
+	pub fn new(width: i32, height: i32) -> Self {
+		Dimensions { width, height }
 	}
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Builder)]
-#[builder(setter(into))]
-pub struct Config {
-	#[builder(default)]
-	#[serde(skip_serializing, skip_deserializing)]
-	pub path: Option<PathBuf>,
-	#[builder(default)]
-	pub windows: Vec<Window>,
-}
-
-impl Config {
-	pub fn new() -> Self {
-		Config::default()
-	}
-
-	pub fn load(path: &str) -> Result<Self> {
-		let json = std::fs::read_to_string(path)?;
-		let mut config: Config = serde_json::from_str(&json)?;
-		config.path = Some(std::path::Path::new(path).to_path_buf());
-		Ok(config)
-	}
-
-	pub fn save_force(&self, path: &str) -> Result<()> {
-		let file = OpenOptions::new()
-			.write(true)
-			.create(true)
-			.truncate(true)
-			.open(path)?;
-		self.write(file)
-	}
-
-	pub fn save(&self, path: &str) -> Result<()> {
-		let file = OpenOptions::new().write(true).create(true).open(path)?;
-		self.write(file)
-	}
-
-	pub fn write<W: std::io::Write>(&self, writer: W) -> Result<()> {
-		let _writer = serde_json::to_writer_pretty(writer, &self)?;
-		Ok(())
-	}
-
-	pub fn search(&self, platform_window: &sys::WindowState) -> Option<Window> {
-		for cfg_window in &self.windows {
-			match (&cfg_window.title, &cfg_window.process) {
-				(Some(cfg_title), Some(cfg_process)) => {
-					match (Regex::new(cfg_title), Regex::new(cfg_process)) {
-						(Ok(title_re), Ok(process_re)) => {
-							match (&platform_window.title, &platform_window.process) {
-								(Some(plat_title), Some(plat_process)) => {
-									if title_re.is_match(plat_title)
-										&& process_re.is_match(plat_process)
-									{
-										return Some(cfg_window.clone());
-									}
-								}
-								_ => {}
-							}
-						}
-						_ => {}
-					}
-				}
-				(Some(cfg_title), None) => {
-					if let Ok(re) = Regex::new(cfg_title) {
-						if let Some(plat_title) = &platform_window.title {
-							if re.is_match(plat_title) {
-								return Some(cfg_window.clone());
-							}
-						}
-					}
-				}
-				(None, Some(cfg_process)) => {
-					if let Ok(re) = Regex::new(cfg_process) {
-						if let Some(plat_process) = &platform_window.process {
-							if re.is_match(plat_process) {
-								return Some(cfg_window.clone());
-							}
-						}
-					}
-				}
-				_ => {}
-			}
-		}
-		None
-	}
-
-	pub fn parse_property_string(the_string: &str) -> Result<(usize, String)> {
-		let tokens: Vec<&str> = the_string.split(".").collect();
-		match tokens.len() {
-			3 => match tokens[0] {
-				"windows" => {
-					if let Ok(index) = tokens[1].parse::<usize>() {
-						match tokens[2] {
-							"x" | "y" | "w" | "h" => return Ok((index, tokens[2].to_string())),
-							_ => {}
-						}
-					} else {
-						return Err(Error::InvalidIndex);
-					}
-				}
-				_ => {}
-			},
-			_ => {}
-		}
-		Err(Error::InvalidProperty)
-	}
-
-	pub fn window_at(&mut self, index: usize) -> Result<&mut Window> {
-		match self.windows.get_mut(index) {
-			Some(window) => Ok(window),
-			None => Err(Error::InvalidIndex),
-		}
-	}
-
-	pub fn print_windows(&self) {
-		let mut table = Table::new();
-		table.set_format(*format::consts::FORMAT_NO_COLSEP);
-		table.add_row(Row::new(vec![
-			Cell::new("Title").style_spec("c"),
-			Cell::new("Process").style_spec("c"),
-			Cell::new("Position").style_spec("c"),
-			Cell::new("Dimension").style_spec("c"),
-		]));
-		for w in &self.windows {
-			let mut row = Row::new(vec![]);
-			if let Some(title) = &w.title {
-				row.add_cell(
-					Cell::new(&shrink(&title, 32)).with_style(Attr::ForegroundColor(color::RED)),
-				);
-			} else {
-				row.add_cell(Cell::new(""));
-			}
-			if let Some(process) = &w.process {
-				row.add_cell(
-					Cell::new(&shrink(&process, 64))
-						.with_style(Attr::ForegroundColor(color::GREEN)),
-				);
-			} else {
-				row.add_cell(Cell::new(""));
-			}
-			match (w.x, w.y) {
-				(Some(x), Some(y)) => row.add_cell(Cell::new(&format!("({}, {})", x, y))),
-				(None, Some(y)) => row.add_cell(Cell::new(&format!("(null, {})", y))),
-				(Some(x), None) => row.add_cell(Cell::new(&format!("({}, null)", x))),
-				_ => row.add_cell(Cell::new("")),
-			}
-			match (w.w, w.h) {
-				(Some(w), Some(h)) => row.add_cell(Cell::new(&format!("{} x {}", w, h))),
-				(None, Some(h)) => row.add_cell(Cell::new(&format!("null x {}", h))),
-				(Some(w), None) => row.add_cell(Cell::new(&format!("{} x null", w))),
-				_ => row.add_cell(Cell::new("")),
-			}
-			table.add_row(row);
-		}
-		table.printstd();
+impl std::fmt::Display for Dimensions {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}x{}", self.width, self.height)
 	}
 }
 
-impl Default for Config {
-	fn default() -> Self {
-		Self {
-			path: None,
-			windows: Vec::new(),
-		}
-	}
-}
-
-pub struct WindowManager<'a> {
-	config: Option<&'a Config>,
-}
-
-pub trait ProvidesWindowList<'a> {
-	fn windows(&self, config: Option<&'a Config>) -> Option<Vec<sys::WindowState>>;
-}
-
-impl<'a> WindowManager<'a> {
-	pub fn new(config: Option<&'a Config>) -> Self {
-		WindowManager { config }
-	}
-
-	pub fn windows(&self) -> Option<Vec<sys::WindowState>> {
-		sys::list_windows(self.config)
-	}
-
-	pub fn layout(&self) {
-		sys::layout_windows(self.config)
-	}
-
-	pub fn print(&self) {
-		sys::print_windows(self.config)
-	}
-}
-
-fn shrink(the_string: &str, shrink_len: usize) -> String {
-	if the_string.chars().count() > shrink_len {
-		let mut shrinked = String::new();
-		if shrink_len % 2 == 0 {
-			for (i, c) in the_string.chars().enumerate() {
-				shrinked.push(c);
-				if i >= (shrink_len / 2 - 2) - 1 {
-					break;
-				}
-			}
-		} else {
-			for (i, c) in the_string.chars().enumerate() {
-				shrinked.push(c);
-				if i >= (shrink_len / 2 - 1) - 1 {
-					break;
-				}
-			}
-		}
-		shrinked.push_str("...");
-		for (i, c) in the_string.chars().enumerate() {
-			if i >= (the_string.len() - (shrink_len / 2) + 1) {
-				shrinked.push(c);
-			}
-		}
-		shrinked
+/// Shrinks a string to a specified maximum length by keeping the left portion
+/// and replacing the right portion with an ellipsis ("...").
+///
+/// # Arguments
+///
+/// * `s` - The string to shrink.
+/// * `max_length` - The maximum length of the string after shrinking. If `max_length`
+///   is less than or equal to the length of `s`, the original string is returned.
+///   If `max_length` is smaller than the length of the ellipsis, the function
+///   will return the ellipsis only.
+///
+/// # Returns
+///
+/// A new string that is either the original string (if its length is less than
+/// or equal to `max_length`) or a shrunk version with the right part replaced
+/// by an ellipsis.
+///
+/// # Examples
+///
+/// ```
+/// # use wlm::shrink_right;
+/// let example = "Hello, World!";
+/// let shrunk = shrink_right(example, 8);
+/// assert_eq!(shrunk, "Hello...");
+///
+/// let short_example = "Hi";
+/// let not_shrunk = shrink_right(short_example, 10);
+/// assert_eq!(not_shrunk, "Hi");
+///
+/// let edge_case = shrink_right("Hello, World!", 3);
+/// assert_eq!(edge_case, "...");
+/// ```
+#[allow(dead_code)]
+pub fn shrink_right(s: &str, max_length: usize) -> String {
+	if s.len() <= max_length {
+		s.to_string()
+	} else if max_length < ELLIPSIS.len() {
+		format!("{}", &ELLIPSIS[..max_length])
 	} else {
-		the_string.to_string()
+		let effective_length = max_length.saturating_sub(ELLIPSIS.len());
+		format!("{}{}", &s[..effective_length], ELLIPSIS)
 	}
 }
 
 #[cfg(test)]
-mod tests {
-	mod parse_property_string {
-		use super::super::*;
+mod test_shrink_right {
+	use super::*;
 
-		#[test]
-		fn windows_0_x() {
-			assert_eq!(
-				(0, "x".to_string()),
-				Config::parse_property_string("windows.0.x").unwrap()
-			);
-		}
+	#[test]
+	fn string_less_than_ellipsis() {
+		let input = "He";
+		let output = shrink_right(input, 2);
+		assert_eq!("He", output);
 	}
 
-	mod shrink {
-		use super::super::*;
-
-		#[test]
-		fn prefix_smaller_than_suffix_when_given_even_length_string_and_even_shrink_length() {
-			assert_eq!("112...9900", shrink("11223344556677889900", 10));
-		}
-
-		#[test]
-		fn prefix_and_suffix_same_length_when_given_even_length_string_and_odd_shrink_length() {
-			assert_eq!("112...900", shrink("11223344556677889900", 9));
-		}
-
-		#[test]
-		fn prefix_and_suffix_same_length_when_given_odd_length_string_and_even_shrink_length() {
-			assert_eq!("112...8990", shrink("1122334455667788990", 10));
-		}
-
-		#[test]
-		fn prefix_and_suffix_same_length_when_given_odd_length_string_and_odd_shrink_length() {
-			assert_eq!("112...990", shrink("1122334455667788990", 9));
-		}
-
-		#[test]
-		fn same_string_if_string_length_is_less_than_shrink_length() {
-			assert_eq!("aaabbb", shrink("aaabbb", 9));
-		}
-
-		#[test]
-		fn same_string_if_string_length_is_equal_to_shrink_length() {
-			assert_eq!("aaabbbccc", shrink("aaabbbccc", 9));
-		}
-
-		#[test]
-		fn handles_unicode_char_on_char_boundary() {
-			// Fixes the following panic error:
-			// panicked at 'byte index 9 is not a char boundary; it is inside '’' (bytes 7..10) of `aa‘bb’cc`'
-			let title_with_unicode = "aa‘bb’cc";
-			assert_eq!(title_with_unicode, shrink(title_with_unicode, 8));
-		}
+	#[test]
+	fn string_same_as_ellipsis() {
+		let input = "Her";
+		let output = shrink_right(input, 3);
+		assert_eq!("Her", output);
 	}
 
-	mod config {
-		mod new {
-			use super::super::super::*;
-
-			#[test]
-			fn windows_defaults_to_empty() {
-				let config = Config::new();
-				assert!(config.windows.len() == 0);
-			}
-		}
-
-		mod load {
-			use super::super::super::*;
-
-			#[test]
-			fn single_window() {
-				let temp_dir = assert_fs::TempDir::new().unwrap();
-				let config_file = temp_dir.child("test.json");
-				config_file
-					.write_str(r#"{"windows": [{"x": 100}]}"#)
-					.unwrap();
-				let config = Config::load(config_file.path().to_str().unwrap());
-				assert!(config.is_ok());
-				let config = config.unwrap();
-				assert!(config.windows[0].x.is_some());
-				assert_eq!(100, config.windows[0].x.unwrap());
-			}
-		}
-
-		mod save {
-			use super::super::super::*;
-
-			#[test]
-			fn single_window() {
-				let temp_dir = assert_fs::TempDir::new().unwrap();
-				let config_file = temp_dir.child("test.json");
-				config_file.assert(predicate::path::missing());
-				let mut config = Config::new();
-				let mut window = Window::new();
-				window.x = Some(100);
-				config.windows.push(window);
-				let save_result = config.save(config_file.path().to_str().unwrap());
-				assert!(save_result.is_ok());
-				config_file.assert(
-					r#"{
-  "windows": [
-    {
-      "x": 100
-    }
-  ]
-}"#,
-				);
-			}
-		}
-
-		mod search {
-			use super::super::super::*;
-
-			#[test]
-			fn matches_window_given_simple_title_only() {
-				let config = ConfigBuilder::default()
-					.windows(vec![WindowBuilder::default()
-						.title(Some("Example Title".to_string()))
-						.build()
-						.unwrap()])
-					.build()
-					.unwrap();
-				let mut window_state = sys::WindowState::new();
-				window_state.title = Some(String::from("Example Title"));
-				let actual = config.search(&window_state);
-				assert!(actual.is_some());
-				assert_eq!("Example Title", &(actual.unwrap().title.unwrap()));
-			}
-
-			#[test]
-			fn matches_window_given_regex_title_only() {
-				let config = ConfigBuilder::default()
-					.windows(vec![WindowBuilder::default()
-						.title(Some(".*Title".to_string()))
-						.build()
-						.unwrap()])
-					.build()
-					.unwrap();
-				let mut window_state = sys::WindowState::new();
-				window_state.title = Some(String::from("Example Title"));
-				let actual = config.search(&window_state);
-				assert!(actual.is_some());
-				assert_eq!(".*Title", &(actual.unwrap().title.unwrap()));
-			}
-
-			#[test]
-			fn matches_window_given_simple_process_only() {
-				let config = ConfigBuilder::default()
-					.windows(vec![WindowBuilder::default()
-						.process(Some("example.exe".to_string()))
-						.build()
-						.unwrap()])
-					.build()
-					.unwrap();
-				let mut window_state = sys::WindowState::new();
-				window_state.process = Some(String::from("example.exe"));
-				let actual = config.search(&window_state);
-				assert!(actual.is_some());
-				assert_eq!("example.exe", actual.unwrap().process.unwrap());
-			}
-
-			#[test]
-			fn matches_window_given_regex_process_only() {
-				let config = ConfigBuilder::default()
-					.windows(vec![WindowBuilder::default()
-						.process(Some(".*.exe".to_string()))
-						.build()
-						.unwrap()])
-					.build()
-					.unwrap();
-				let mut window_state = sys::WindowState::new();
-				window_state.process = Some(String::from("example.exe"));
-				let actual = config.search(&window_state);
-				assert!(actual.is_some());
-				assert_eq!(".*.exe", actual.unwrap().process.unwrap());
-			}
-
-			#[test]
-			fn matches_window_given_regex_process_and_regex_title() {
-				let config = ConfigBuilder::default()
-					.windows(vec![WindowBuilder::default()
-						.title(Some(".*Title".to_string()))
-						.process(Some(".*.exe".to_string()))
-						.build()
-						.unwrap()])
-					.build()
-					.unwrap();
-				let mut window_state = sys::WindowState::new();
-				window_state.title = Some(String::from("Window Title"));
-				window_state.process = Some(String::from("example.exe"));
-				let actual = config.search(&window_state);
-				assert!(actual.is_some());
-				let actual = actual.unwrap();
-				assert_eq!(".*Title", actual.title.unwrap());
-				assert_eq!(".*.exe", actual.process.unwrap());
-			}
-
-			#[test]
-			fn preserves_order_given_same_title_with_latter_defining_process() {
-				let mut config = Config::new();
-				let mut window_1 = Window::new();
-				let mut window_2 = Window::new();
-				window_1.title = Some(String::from("Example Title"));
-				window_2.title = Some(String::from("Example Title"));
-				window_2.process = Some(String::from("example.exe"));
-				config.windows.push(window_1);
-				config.windows.push(window_2);
-				let mut window_state = sys::WindowState::new();
-				window_state.title = Some(String::from("Example Title"));
-				window_state.process = Some(String::from("example.exe"));
-				let actual = config.search(&window_state);
-				assert!(actual.is_some());
-				let actual = actual.unwrap();
-				assert!(actual.title.is_some());
-				assert!(actual.process.is_none());
-				assert_eq!("Example Title", actual.title.unwrap());
-			}
-		}
-
-		mod window_at {
-			use super::super::super::*;
-
-			#[test]
-			fn gets_first() {
-				let mut config = ConfigBuilder::default()
-					.windows(vec![WindowBuilder::default().build().unwrap()])
-					.build()
-					.unwrap();
-				let window = config.window_at(0);
-				assert!(window.is_ok());
-			}
-
-			#[test]
-			fn error_if_out_of_bounds() {
-				let mut config = ConfigBuilder::default().windows(vec![]).build().unwrap();
-				let window = config.window_at(0);
-				assert!(window.is_err());
-			}
-		}
+	#[test]
+	fn long_string_with_max_same_as_ellipsis() {
+		let input = "Hello, World!";
+		let output = shrink_right(input, 3);
+		assert_eq!("...", output);
 	}
+
+	#[test]
+	fn long_string_with_max_less_than_ellipsis() {
+		let input = "Hello, World!";
+		let output = shrink_right(input, 1);
+		assert_eq!(".", output);
+	}
+
+	#[test]
+	fn string_less_than_max() {
+		let input = "Hello, World!";
+		let output = shrink_right(input, 20);
+		assert_eq!("Hello, World!", output);
+	}
+
+	#[test]
+	fn string_more_than_max() {
+		let input = "Hello, World!";
+		let output = shrink_right(input, 6);
+		assert_eq!("Hel...", output);
+	}
+
+	#[test]
+	fn string_same_as_max() {
+		let input = "Hello, World!";
+		let output = shrink_right(input, input.len());
+		assert_eq!("Hello, World!", output);
+	}
+
+	#[test]
+	fn empty_string() {
+		let input = "";
+		let output = shrink_right(input, 5);
+		assert_eq!("", output);
+	}
+
+	#[test]
+	fn to_zero_length() {
+		let input = "Hello, World!";
+		let output = shrink_right(input, 0);
+		assert_eq!("", output);
+	}
+}
+
+/// Shrinks a string to a specified maximum length by keeping the right portion
+/// and replacing the left portion with an ellipsis ("...").
+///
+/// # Arguments
+///
+/// * `s` - The string to shrink.
+/// * `max_length` - The maximum length of the string after shrinking. If `max_length`
+///   is less than or equal to the length of `s`, the original string is returned.
+///   If `max_length` is smaller than the length of the ellipsis, the function
+///   will return the ellipsis only.
+///
+/// # Returns
+///
+/// A new string that is either the original string (if its length is less than
+/// or equal to `max_length`) or a shrunk version with the left part replaced
+/// by an ellipsis.
+///
+/// # Examples
+///
+/// ```
+/// # use wlm::shrink_left;
+/// let example = "Hello, World!";
+/// let shrunk = shrink_left(example, 8);
+/// assert_eq!(shrunk, "...orld!");
+///
+/// let short_example = "Hi";
+/// let not_shrunk = shrink_left(short_example, 10);
+/// assert_eq!(not_shrunk, "Hi");
+///
+/// let edge_case = shrink_left("Hello, World!", 3);
+/// assert_eq!(edge_case, "...");
+/// ```
+#[allow(dead_code)]
+pub fn shrink_left(s: &str, max_length: usize) -> String {
+	if s.len() <= max_length {
+		s.to_string()
+	} else if max_length < ELLIPSIS.len() {
+		format!("{}", &ELLIPSIS[..max_length])
+	} else {
+		let effective_length = max_length.saturating_sub(ELLIPSIS.len());
+		format!("{}{}", ELLIPSIS, &s[s.len() - effective_length..])
+	}
+}
+
+#[cfg(test)]
+mod test_shrink_left {
+	use super::*;
+
+	#[test]
+	fn string_less_than_ellipsis() {
+		let input = "He";
+		let output = shrink_left(input, 2);
+		assert_eq!("He", output);
+	}
+
+	#[test]
+	fn string_same_as_ellipsis() {
+		let input = "Her";
+		let output = shrink_left(input, 3);
+		assert_eq!("Her", output);
+	}
+
+	#[test]
+	fn long_string_with_max_same_as_ellipsis() {
+		let input = "Hello, World!";
+		let output = shrink_left(input, 3);
+		assert_eq!("...", output);
+	}
+
+	#[test]
+	fn long_string_with_max_less_than_ellipsis() {
+		let input = "Hello, World!";
+		let output = shrink_left(input, 1);
+		assert_eq!(".", output);
+	}
+
+	#[test]
+	fn string_less_than_max() {
+		let input = "Hello, World!";
+		let output = shrink_left(input, 20);
+		assert_eq!("Hello, World!", output);
+	}
+
+	#[test]
+	fn string_more_than_max() {
+		let input = "Hello, World!";
+		let output = shrink_left(input, 6);
+		assert_eq!("...ld!", output);
+	}
+
+	#[test]
+	fn string_same_as_max() {
+		let input = "Hello, World!";
+		let output = shrink_left(input, input.len());
+		assert_eq!("Hello, World!", output);
+	}
+
+	#[test]
+	fn empty_string() {
+		let input = "";
+		let output = shrink_left(input, 5);
+		assert_eq!("", output);
+	}
+
+	#[test]
+	fn to_zero_length() {
+		let input = "Hello, World!";
+		let output = shrink_left(input, 0);
+		assert_eq!("", output);
+	}
+}
+
+/// Shrinks a string to a specified length by keeping equal parts from the start and end
+/// and replacing the middle part with an ellipsis ("..."). If the `max_length` is odd, one extra
+/// character is taken from the beginning.
+///
+/// # Arguments
+///
+/// * `s` - The string to shrink.
+/// * `max_length` - The desired length of the string after shrinking, including the ellipsis.
+///   If `max_length` is less than or equal to the length of `s`, the original string is returned.
+///   If `max_length` is smaller than the length of the ellipsis, the function will return the
+///   ellipsis only.
+///
+/// # Returns
+///
+/// A new string that is either the original string (if its length is less than or equal to
+/// `max_length`) or a shrunk version with the middle part replaced by an ellipsis.
+///
+/// # Examples
+///
+/// ```
+/// # use wlm::shrink_center;
+/// let example = "Hello, World!";
+/// let shrunk = shrink_center(example, 7);
+/// assert_eq!(shrunk, "He...d!");
+/// let shrunk = shrink_center(example, 8);
+/// assert_eq!(shrunk, "He...ld!");
+///
+/// let short_example = "Hi";
+/// let not_shrunk = shrink_center(short_example, 10);
+/// assert_eq!(not_shrunk, "Hi");
+///
+/// let edge_case = shrink_center("Hello, World!", 3);
+/// assert_eq!(edge_case, "...");
+/// ```
+#[allow(dead_code)]
+pub fn shrink_center(s: &str, max_length: usize) -> String {
+	let len = s.len();
+	if len <= max_length {
+		return s.to_string();
+	} else if max_length < ELLIPSIS.len() {
+		return format!("{}", &ELLIPSIS[..max_length]);
+	}
+
+	// Adjust for the 3 characters in "..."
+	let effective_length = max_length.saturating_sub(ELLIPSIS.len());
+	let half_count = effective_length / 2;
+	let start = &s[..half_count];
+	let end = if effective_length % 2 == 0 {
+		&s[len - half_count..]
+	} else {
+		&s[len - half_count - 1..]
+	};
+
+	format!("{}{}{}", start, ELLIPSIS, end)
+}
+
+#[cfg(test)]
+mod test_shrink_center {
+	use super::*;
+
+	#[test]
+	fn string_less_than_ellipsis() {
+		let input = "He";
+		let output = shrink_center(input, 2);
+		assert_eq!("He", output);
+	}
+
+	#[test]
+	fn string_same_as_ellipsis() {
+		let input = "Her";
+		let output = shrink_center(input, 3);
+		assert_eq!("Her", output);
+	}
+
+	#[test]
+	fn long_string_with_max_same_as_ellipsis() {
+		let input = "Hello, World!";
+		let output = shrink_center(input, 3);
+		assert_eq!("...", output);
+	}
+
+	#[test]
+	fn long_string_with_max_less_than_ellipsis() {
+		let input = "Hello, World!";
+		let output = shrink_center(input, 1);
+		assert_eq!(".", output);
+	}
+
+	#[test]
+	fn string_less_than_max() {
+		let input = "Hello, World!";
+		let output = shrink_center(input, 20);
+		assert_eq!("Hello, World!", output);
+	}
+
+	#[test]
+	fn string_more_than_even_max() {
+		let input = "Hello, World!";
+		let output = shrink_center(input, 6);
+		assert_eq!("H...d!", output);
+	}
+
+	#[test]
+	fn string_more_than_odd_max() {
+		let input = "Hello, World!";
+		let output = shrink_center(input, 7);
+		assert_eq!("He...d!", output);
+	}
+
+	#[test]
+	fn string_same_as_max() {
+		let input = "Hello, World!";
+		let output = shrink_center(input, input.len());
+		assert_eq!("Hello, World!", output);
+	}
+
+	#[test]
+	fn empty_string() {
+		let input = "";
+		let output = shrink_center(input, 5);
+		assert_eq!("", output);
+	}
+
+	#[test]
+	fn to_zero_length() {
+		let input = "Hello, World!";
+		let output = shrink_center(input, 0);
+		assert_eq!("", output);
+	}
+}
+
+/// A trait for managing window layouts on a screen.
+///
+/// Implementors of this trait are responsible for providing a collection of windows
+/// and a method to layout these windows based on a given configuration.
+pub trait WindowProvider {
+	/// Returns a vector of `Screen` instances with `Window` instances.
+	///
+	/// This method should be implemented to provide the current set of screens
+	/// along with the windows that the provider is managing.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// # use wlm::{default_window_provider, WindowProvider};
+	/// let provider = default_window_provider();
+	/// let screens = provider.screens();
+	/// for screen in screens {
+	///     println!("{}", screen);
+	/// 	for window in screen.windows {
+	///  	   println!("{}", window);
+	///	 	}
+	/// }
+	/// ```
+	fn screens(&self) -> Vec<layout::Screen>;
+
+	/// Lays out windows based on the specified configuration.
+	///
+	/// This method should be implemented to arrange the windows according
+	/// to the provided configuration.
+	///
+	/// # Arguments
+	///
+	/// * `config` - A reference to a `Layout` instance that specifies
+	///   the layout configuration.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// # use wlm::{default_window_provider, layout::Layout, WindowProvider};
+	/// let provider = default_window_provider();
+	/// let config = Layout::new();
+	/// provider.layout(&config);
+	/// ```
+	fn layout(&self, config: &layout::Layout);
+}
+
+/// Provides a default window provider.
+///
+/// This function is a factory method that creates an instance of a type
+/// that implements the `WindowProvider` trait. The implementation varies
+/// based on the target operating system.
+///
+/// # Examples
+///
+/// ```
+/// use wlm::{default_window_provider, WindowProvider, layout::Layout};
+/// let provider = default_window_provider();
+/// let windows = provider.screens();
+/// provider.layout(&Layout::new(/* ... */));
+/// ```
+///
+/// # Platform-specific Behavior
+///
+/// - On Windows platforms, this will return a `Win32Provider`.
+pub fn default_window_provider() -> impl WindowProvider {
+	#[cfg(windows)]
+	let provider = crate::platform::win::Win32Provider::default();
+	#[cfg(unix)]
+	let provider = crate::platform::win::X11Provider::default();
+	provider
 }

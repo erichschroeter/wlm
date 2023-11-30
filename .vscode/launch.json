@@ -20,7 +20,7 @@
             "type": "cppvsdbg",
             "request": "launch",
             // Run `cargo test` and observe the {file}-{hash}.exe used for the unit tests.
-            "program": "${workspaceFolder}/target/debug/deps/window_layout_manager-HASH.exe",
+            "program": "${workspaceFolder}/target/debug/deps/wlm-HASH.exe",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",

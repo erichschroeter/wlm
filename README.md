@@ -17,7 +17,7 @@ The intent is to provide cross-platform support, with Windows being the first to
 
 A config is a list of windows and their respective properties.
 
-    wlm init
+    wlm ls
 
 By default, this will create a `default.json` in your platform-specific location.
 This is determined by the [directories](https://crates.io/crates/directories) library.
@@ -29,29 +29,11 @@ Once a window is in a state you like, get its information via the `ls` command.
 
     wlm ls
 
-## Modify a config
-
-The following example will create a new window in your config:
-
-    wlm add --process "chrome.exe" -x 0 -y 0 -w 800 -H 600
-
-And now that, that window exists it can be modified via the following example:
-
-    wlm config windows.0.process "chrome.exe"
-    wlm config windows.0.x 0
-    wlm config windows.0.y 0
-    wlm config windows.0.w 800
-    wlm config windows.0.h 600
-
-To view your existing config:
-
-    wlm config
-
-## Apply a config
+## Apply a layout
 
 Now to apply the config:
 
-    wlm apply
+    wlm layout
 
 To apply a different config, simply specify it with the `--file` argument.
 
