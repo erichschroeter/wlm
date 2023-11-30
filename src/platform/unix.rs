@@ -79,6 +79,56 @@ fn list_windows() -> Vec<X11Window> {
 				window.y(Some(i32::to_string(&attributes.y)));
 				window.w(Some(i32::to_string(&attributes.width)));
 				window.h(Some(i32::to_string(&attributes.height)));
+
+				// Define the atom for _NET_WM_PID
+				let net_wm_pid_atom = {
+					let atom_name = "_NET_WM_PID\0";
+					xlib::XInternAtom(display, atom_name.as_ptr() as *const i8, xlib::False)
+				};
+
+				let mut actual_type_return = 0;
+				let mut actual_format_return = 0;
+				let mut nitems_return = 0;
+				let mut bytes_after_return = 0;
+				let mut prop_return = std::ptr::null_mut();
+
+				// Get the _NET_WM_PID property
+				if xlib::XGetWindowProperty(
+						display,
+						window_index,
+						net_wm_pid_atom,
+						0,
+						std::mem::size_of::<u64>() as i64,
+						xlib::False,
+						xlib::AnyPropertyType as u64,
+						&mut actual_type_return,
+						&mut actual_format_return,
+						&mut nitems_return,
+						&mut bytes_after_return,
+						&mut prop_return,
+					) == xlib::Success.into()
+				{
+					if !prop_return.is_null() && actual_format_return == 32 {
+						let pid_ptr = prop_return as *const u64;
+						let pid = *pid_ptr;
+						println!("Window ID: {}, PID: {}", window_index, pid);
+
+						xlib::XFree(prop_return as *mut std::ffi::c_void);
+						let proc_path = format!("/proc/{}/comm", pid);
+						match std::fs::read_to_string(proc_path) {
+							Ok(process_name) => {
+								let process_name = process_name.trim(); // Remove any trailing newline
+								window.process(Some(process_name.to_string()));
+								log::debug!("Window ID: {}, Process Name: {}", window_index, process_name);
+							}
+							Err(e) => {
+								log::warn!("Failed to read process name for PID {}: {}", pid, e);
+							}
+						}
+					}
+				} else {
+					log::warn!("No _NET_WM_PID property for Window ID: {}", window_index);
+				}
             }
 			let x11window = X11Window {
 				window: window.build().unwrap(),
