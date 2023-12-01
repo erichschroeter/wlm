@@ -3,7 +3,7 @@ use std::{
 	ptr,
 };
 
-use x11::xlib;
+use x11::xlib::{self, XInternAtom};
 
 use crate::{
 	layout::{Screen, Window, WindowBuilder},
@@ -98,6 +98,7 @@ impl X11Window {
 		let location = self.request_location(screen);
 		self.window.x = Some(location.x.to_string());
 		self.window.y = Some(location.y.to_string());
+		self.window.title = self.request_name(screen).into();
 		self
 	}
 
@@ -159,6 +160,72 @@ impl X11Window {
 			Point::new(x, y)
 		}
 	}
+
+	fn request_window_property_by_atom(&self, screen: &X11Screen, atom: u64) -> Option<String> {
+		let mut actual_type_return = 0;
+		let mut actual_format_return = 0;
+		let mut nitems_return = 0;
+		let mut bytes_after_return = 0;
+		let mut prop_return = std::ptr::null_mut();
+		// let name = xlib::XGetWindowProperty(screen.display_ptr, self.id, atom_net_wm_name, 0, 0, xlib::False, 6, 5, 4, 3, 2, 1)
+		let status = unsafe {
+			xlib::XGetWindowProperty(
+				screen.display_ptr,
+				self.id,
+				atom,
+				0,
+				std::mem::size_of::<u64>() as i64,
+				xlib::False,
+				xlib::AnyPropertyType as u64,
+				&mut actual_type_return,
+				&mut actual_format_return,
+				&mut nitems_return,
+				&mut bytes_after_return,
+				&mut prop_return,
+			)
+		};
+		if status == xlib::Success.into() {
+			if !prop_return.is_null() {
+				let window_name = unsafe { CStr::from_ptr(prop_return as *const i8) }
+					.to_string_lossy()
+					.into_owned();
+				unsafe {
+					xlib::XFree(prop_return as *mut std::ffi::c_void);
+				}
+				return Some(window_name);
+			}
+		} else {
+			log::warn!("xlib::XGetWindowProperty failed!");
+		}
+		None
+	}
+
+	pub fn request_name(&self, screen: &X11Screen) -> String {
+		let atom_net_wm_name = unsafe {
+			let atom_name = "_NET_WM_NAME\0";
+			XInternAtom(
+				screen.display_ptr,
+				atom_name.as_ptr() as *const i8,
+				xlib::False,
+			)
+		};
+		let atom_wm_name = unsafe {
+			let atom_name = "WM_NAME\0";
+			XInternAtom(
+				screen.display_ptr,
+				atom_name.as_ptr() as *const i8,
+				xlib::False,
+			)
+		};
+
+		if let Some(name) = self.request_window_property_by_atom(screen, atom_net_wm_name) {
+			name
+		} else if let Some(name) = self.request_window_property_by_atom(screen, atom_wm_name) {
+			name
+		} else {
+			"".to_string()
+		}
+	}
 }
 
 impl Default for X11Window {
@@ -179,23 +246,6 @@ impl std::fmt::Display for X11Window {
 		write!(f, "{:#?}", &self)
 	}
 }
-
-// mod xdo {
-//     use crate::Point;
-
-//     use super::{X11Screen, X11Window};
-
-// 	pub fn get_window_location(screen: &X11Screen, window: &X11Window) -> Point {
-//         let mut returned_root = 0;
-//         let mut returned_parent = 0;
-//         let mut top_level_windows = ptr::null_mut();
-//         let mut num_top_level_windows = 0;
-
-//         xlib::XQueryTree(screen., window.id, &mut returned_root, &mut returned_parent, &mut top_level_windows, &mut num_top_level_windows);
-
-// 		Point::new(0, 0)
-// 	}
-// }
 
 /// https://github.com/jordansissel/xdotool
 fn list_windows() -> Vec<X11Window> {
