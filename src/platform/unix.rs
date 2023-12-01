@@ -99,6 +99,7 @@ impl X11Window {
 		self.window.x = Some(location.x.to_string());
 		self.window.y = Some(location.y.to_string());
 		self.window.title = self.request_name(screen).into();
+		self.window.process = self.request_process_name(screen).into();
 		self
 	}
 
@@ -167,7 +168,6 @@ impl X11Window {
 		let mut nitems_return = 0;
 		let mut bytes_after_return = 0;
 		let mut prop_return = std::ptr::null_mut();
-		// let name = xlib::XGetWindowProperty(screen.display_ptr, self.id, atom_net_wm_name, 0, 0, xlib::False, 6, 5, 4, 3, 2, 1)
 		let status = unsafe {
 			xlib::XGetWindowProperty(
 				screen.display_ptr,
@@ -200,6 +200,44 @@ impl X11Window {
 		None
 	}
 
+	fn request_window_property_by_atom_as_i32(&self, screen: &X11Screen, atom: u64) -> Option<i32> {
+		let mut actual_type_return = 0;
+		let mut actual_format_return = 0;
+		let mut nitems_return = 0;
+		let mut bytes_after_return = 0;
+		let mut prop_return = std::ptr::null_mut();
+		let status = unsafe {
+			xlib::XGetWindowProperty(
+				screen.display_ptr,
+				self.id,
+				atom,
+				0,
+				std::mem::size_of::<u64>() as i64,
+				xlib::False,
+				xlib::AnyPropertyType as u64,
+				&mut actual_type_return,
+				&mut actual_format_return,
+				&mut nitems_return,
+				&mut bytes_after_return,
+				&mut prop_return,
+			)
+		};
+		if status == xlib::Success.into() {
+			if !prop_return.is_null() && actual_format_return == 32 {
+				let pid_ptr = prop_return as *const i32;
+				let pid = unsafe { *pid_ptr };
+
+				unsafe {
+					xlib::XFree(prop_return as *mut std::ffi::c_void);
+				}
+				return Some(pid);
+			}
+		} else {
+			log::warn!("xlib::XGetWindowProperty failed!");
+		}
+		None
+	}
+
 	pub fn request_name(&self, screen: &X11Screen) -> String {
 		let atom_net_wm_name = unsafe {
 			let atom_name = "_NET_WM_NAME\0";
@@ -225,6 +263,39 @@ impl X11Window {
 		} else {
 			"".to_string()
 		}
+	}
+
+	pub fn request_pid(&self, screen: &X11Screen) -> Option<i32> {
+		let atom_net_wm_pid = unsafe {
+			let atom_name = "_NET_WM_PID\0";
+			XInternAtom(
+				screen.display_ptr,
+				atom_name.as_ptr() as *const i8,
+				xlib::False,
+			)
+		};
+
+		if let Some(pid) = self.request_window_property_by_atom_as_i32(screen, atom_net_wm_pid) {
+			Some(pid)
+		} else {
+			None
+		}
+	}
+
+	pub fn request_process_name(&self, screen: &X11Screen) -> String {
+		if let Some(pid) = self.request_pid(screen) {
+			let proc_path = format!("/proc/{}/comm", pid);
+			match std::fs::read_to_string(proc_path) {
+				Ok(process_name) => {
+					let process_name = process_name.trim(); // Remove any trailing newline
+					return process_name.to_string();
+				}
+				Err(e) => {
+					log::warn!("Failed to read process name for PID {}: {}", pid, e);
+				}
+			}
+		}
+		"".to_string()
 	}
 }
 
