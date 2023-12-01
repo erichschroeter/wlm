@@ -1,8 +1,14 @@
-use std::{ptr, ffi::CStr};
+use std::{
+	ffi::{c_ulong, CStr},
+	ptr,
+};
 
 use x11::xlib;
 
-use crate::{WindowProvider, layout::{Window, Screen, WindowBuilder}, Dimensions};
+use crate::{
+	layout::{Screen, Window, WindowBuilder},
+	Dimensions, Point, WindowProvider,
+};
 // extern crate x11;
 
 // use std::ptr;
@@ -21,12 +27,7 @@ impl WindowProvider for X11Provider {
 	fn screens(&self) -> Vec<crate::layout::Screen> {
 		let windows = list_windows();
 		let mut screen = Screen::new();
-		for w in windows {
-			let window = WindowBuilder::default()
-				.title(w.window.title)
-				.build().unwrap();
-			screen.windows.push(window);
-		}
+		screen.windows = windows.iter().map(|x11w| x11w.window.clone()).collect();
 		let screens = vec![screen];
 		screens
 	}
@@ -37,40 +38,126 @@ impl WindowProvider for X11Provider {
 #[derive(Debug, Clone)]
 pub struct X11Screen {
 	pub display_ptr: *mut xlib::Display,
+	pub id: i32,
 	pub name: String,
 	pub dimensions: Dimensions,
 }
 
 impl Default for X11Screen {
 	fn default() -> Self {
-        let display_ptr = unsafe { xlib::XOpenDisplay(ptr::null()) };
-        if display_ptr.is_null() {
+		let display_ptr = unsafe { xlib::XOpenDisplay(ptr::null()) };
+		if display_ptr.is_null() {
 			panic!("XOpenDisplay failed to get default screen");
-        }
+		}
 		let display_name_ptr = unsafe { CStr::from_ptr(xlib::XDisplayName(ptr::null())) };
-		let display_name = display_name_ptr.to_str().to_owned().unwrap_or("unknown").to_string();
-		let screen_num = unsafe { xlib::XDefaultScreen(display_ptr) };
-		let width = unsafe { xlib::XDisplayWidth(display_ptr, screen_num) };
-		let height = unsafe { xlib::XDisplayHeight(display_ptr, screen_num) };
-		X11Screen { display_ptr, name: display_name, dimensions: Dimensions::new(width, height) }
+		let display_name = display_name_ptr
+			.to_str()
+			.to_owned()
+			.unwrap_or("unknown")
+			.to_string();
+		let id = unsafe { xlib::XDefaultScreen(display_ptr) };
+		let width = unsafe { xlib::XDisplayWidth(display_ptr, id) };
+		let height = unsafe { xlib::XDisplayHeight(display_ptr, id) };
+		X11Screen {
+			display_ptr,
+			id,
+			name: display_name,
+			dimensions: Dimensions::new(width, height),
+		}
 	}
 }
 
 impl std::fmt::Display for X11Screen {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "id: {}, name: \"{}\", dimensions: {}", self.display_ptr as u32, self.name, self.dimensions)
+		write!(
+			f,
+			"id: {}, name: \"{}\", dimensions: {}",
+			self.display_ptr as u32, self.name, self.dimensions
+		)
 	}
 }
 
 #[derive(Debug, Clone)]
 pub struct X11Window {
-	pub id: i32,
+	pub id: u64,
 	pub window: Window,
 }
 
 impl X11Window {
-	pub fn new(id: i32) -> Self {
-		X11Window { id, window: WindowBuilder::default().build().unwrap() }
+	pub fn new(id: u64) -> Self {
+		X11Window {
+			id,
+			window: WindowBuilder::default().build().unwrap(),
+		}
+	}
+
+	pub fn populate(mut self, screen: &X11Screen) -> Self {
+		let size = self.request_size(screen);
+		self.window.w = Some(size.width.to_string());
+		self.window.h = Some(size.height.to_string());
+		let location = self.request_location(screen);
+		self.window.x = Some(location.x.to_string());
+		self.window.y = Some(location.y.to_string());
+		self
+	}
+
+	pub fn request_size(&self, screen: &X11Screen) -> Dimensions {
+		let mut attributes: xlib::XWindowAttributes = unsafe { std::mem::zeroed() };
+		unsafe {
+			xlib::XGetWindowAttributes(screen.display_ptr, self.id, &mut attributes);
+		}
+		Dimensions::new(attributes.width, attributes.height)
+	}
+
+	pub fn request_location(&self, screen: &X11Screen) -> Point {
+		// The coordinates in attr are relative to the parent window.  If
+		// the parent window is the root window, then the coordinates are
+		// correct.  If the parent window isn't the root window --- which
+		// is likely --- then we translate them.
+		let mut attributes: xlib::XWindowAttributes = unsafe { std::mem::zeroed() };
+		unsafe {
+			xlib::XGetWindowAttributes(screen.display_ptr, self.id, &mut attributes);
+		}
+
+		let mut returned_root = 0;
+		let mut parent = 0;
+		let mut children = ptr::null_mut();
+		let mut children_count = 0;
+
+		unsafe {
+			xlib::XQueryTree(
+				screen.display_ptr,
+				self.id as c_ulong,
+				&mut returned_root,
+				&mut parent,
+				&mut children,
+				&mut children_count,
+			);
+			if !children.is_null() {
+				xlib::XFree(children as *mut _);
+			}
+		}
+
+		if parent == attributes.root {
+			Point::new(attributes.x, attributes.y)
+		} else {
+			let mut x = 0;
+			let mut y = 0;
+			let unused_child = ptr::null_mut();
+			unsafe {
+				xlib::XTranslateCoordinates(
+					screen.display_ptr,
+					self.id,
+					attributes.root,
+					0,
+					0,
+					&mut x,
+					&mut y,
+					unused_child,
+				);
+			}
+			Point::new(x, y)
+		}
 	}
 }
 
@@ -82,7 +169,14 @@ impl Default for X11Window {
 
 impl std::fmt::Display for X11Window {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "id: {}", self.id)
+		// let x: i32 = self.window.x.unwrap_or("0".to_string()).parse().unwrap();
+		// let y: i32 = self.window.y.unwrap_or("0".to_string()).parse().unwrap();
+		// let location = Point::new(x, y);
+		// let w: i32 = self.window.w.unwrap_or("0".to_string()).parse().unwrap();
+		// let h: i32 = self.window.h.unwrap_or("0".to_string()).parse().unwrap();
+		// let dimensions = Dimensions::new(w, h);
+		// write!(f, "id: {}, coordinates: {}, dimensions: {}", self.id, location, dimensions)
+		write!(f, "{:#?}", &self)
 	}
 }
 
@@ -108,40 +202,64 @@ fn list_windows() -> Vec<X11Window> {
 	let mut x11windows = Vec::new();
 	let screen = X11Screen::default();
 	log::error!("Primary screen: {}", screen);
-    // unsafe {
-    //     let display = xlib::XOpenDisplay(ptr::null());
-    //     if display.is_null() {
-    //         eprintln!("Cannot open display");
-    //         std::process::exit(1);
-    //     }
+
+	let root = unsafe { xlib::XRootWindow(screen.display_ptr, screen.id) };
+	let mut returned_root = 0;
+	let mut returned_parent = 0;
+	let mut children = ptr::null_mut();
+	let mut num_children = 0;
+
+	unsafe {
+		xlib::XQueryTree(
+			screen.display_ptr,
+			root,
+			&mut returned_root,
+			&mut returned_parent,
+			&mut children,
+			&mut num_children,
+		);
+	}
+
+	for i in 0..num_children {
+		let window_index = unsafe { *children.offset(i as isize) };
+		let window = X11Window::new(window_index).populate(&screen);
+		log::warn!("Window: {}", window);
+		x11windows.push(window);
+	}
+	// unsafe {
+	//     let display = xlib::XOpenDisplay(ptr::null());
+	//     if display.is_null() {
+	//         eprintln!("Cannot open display");
+	//         std::process::exit(1);
+	//     }
 
 	// 	// TODO https://unix.stackexchange.com/questions/573121/get-current-screen-dimensions-via-xlib-using-c
-    //     let screen = xlib::XDefaultScreen(display);
-    //     let root = xlib::XRootWindow(display, screen);
+	//     let screen = xlib::XDefaultScreen(display);
+	//     let root = xlib::XRootWindow(display, screen);
 
-    //     let mut returned_root = 0;
-    //     let mut returned_parent = 0;
-    //     let mut top_level_windows = ptr::null_mut();
-    //     let mut num_top_level_windows = 0;
+	//     let mut returned_root = 0;
+	//     let mut returned_parent = 0;
+	//     let mut top_level_windows = ptr::null_mut();
+	//     let mut num_top_level_windows = 0;
 
-    //     xlib::XQueryTree(display, root, &mut returned_root, &mut returned_parent, &mut top_level_windows, &mut num_top_level_windows);
+	//     xlib::XQueryTree(display, root, &mut returned_root, &mut returned_parent, &mut top_level_windows, &mut num_top_level_windows);
 
-    //     for i in 0..num_top_level_windows {
-    //         let window_index = *top_level_windows.offset(i as isize);
+	//     for i in 0..num_top_level_windows {
+	//         let window_index = *top_level_windows.offset(i as isize);
 	// 		let mut window = WindowBuilder::default();
 
-    //         let mut attributes: xlib::XWindowAttributes = std::mem::zeroed();
-    //         xlib::XGetWindowAttributes(display, window_index, &mut attributes);
+	//         let mut attributes: xlib::XWindowAttributes = std::mem::zeroed();
+	//         xlib::XGetWindowAttributes(display, window_index, &mut attributes);
 
-    //         if attributes.map_state == xlib::IsViewable {
-    //             let mut name = ptr::null_mut();
-    //             xlib::XFetchName(display, window_index, &mut name);
-    //             if !name.is_null() {
-    //                 let window_name = std::ffi::CStr::from_ptr(name).to_string_lossy();
-    //                 println!("Window ID: {}, Name: {}", window_index, window_name);
+	//         if attributes.map_state == xlib::IsViewable {
+	//             let mut name = ptr::null_mut();
+	//             xlib::XFetchName(display, window_index, &mut name);
+	//             if !name.is_null() {
+	//                 let window_name = std::ffi::CStr::from_ptr(name).to_string_lossy();
+	//                 println!("Window ID: {}, Name: {}", window_index, window_name);
 	// 				window.title(window_name.to_string());
-    //                 xlib::XFree(name as *mut _);
-    //             }
+	//                 xlib::XFree(name as *mut _);
+	//             }
 
 	// 			window.x(Some(i32::to_string(&attributes.x)));
 	// 			window.y(Some(i32::to_string(&attributes.y)));
@@ -197,18 +315,18 @@ fn list_windows() -> Vec<X11Window> {
 	// 			} else {
 	// 				log::warn!("No _NET_WM_PID property for Window ID: {}", window_index);
 	// 			}
-    //         }
+	//         }
 	// 		let x11window = X11Window {
 	// 			window: window.build().unwrap(),
 	// 		};
 	// 		x11windows.push(x11window);
-    //     }
+	//     }
 
-    //     if !top_level_windows.is_null() {
-    //         xlib::XFree(top_level_windows as *mut _);
-    //     }
+	//     if !top_level_windows.is_null() {
+	//         xlib::XFree(top_level_windows as *mut _);
+	//     }
 
-    //     xlib::XCloseDisplay(display);
-    // }
+	//     xlib::XCloseDisplay(display);
+	// }
 	x11windows
 }

@@ -407,7 +407,6 @@ fn ls(matches: &ArgMatches) {
 	let format = matches
 		.get_one::<Format>("format")
 		.unwrap_or(&Format::Table);
-	log::warn!("Format: {}", format);
 	match format {
 		Format::Table => ls_table(),
 		Format::Yaml => ls_yaml(&mut std::io::stdout()),
