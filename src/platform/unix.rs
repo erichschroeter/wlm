@@ -223,7 +223,6 @@ fn list_windows() -> Vec<X11Window> {
 	for i in 0..num_children {
 		let window_index = unsafe { *children.offset(i as isize) };
 		let window = X11Window::new(window_index).populate(&screen);
-		log::warn!("Window: {}", window);
 		x11windows.push(window);
 	}
 	// unsafe {
